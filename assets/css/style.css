@@ -1,0 +1,242 @@
+/* Main Styling */
+:root {
+    --primary-color: #4e73df;
+    --secondary-color: #1cc88a;
+    --dark-color: #5a5c69;
+    --light-color: #f8f9fc;
+    --danger-color: #e74a3b;
+    --warning-color: #f6c23e;
+    --info-color: #36b9cc;
+    --sidebar-width: 250px;
+    --header-height: 60px;
+}
+
+body {
+    font-family: 'Nunito', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 0.9rem;
+    background-color: #f8f9fc;
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+    padding-top: var(--header-height); /* Thêm padding-top bằng chiều cao của header */
+}
+
+/* Wrapper */
+.wrapper {
+    display: flex;
+    width: 100%;
+    min-height: calc(100vh - var(--header-height));
+    align-items: stretch;
+}
+
+/* Navbar/Header Styling */
+.navbar {
+    padding: 0.5rem 1rem;
+    background: var(--primary-color) !important;
+    border: none;
+    border-radius: 0;
+    box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+    position: fixed;
+    width: 100%;
+    top: 0;
+    left: 0;
+    height: var(--header-height);
+    z-index: 1030;
+}
+
+.navbar-brand {
+    font-weight: 700;
+    font-size: 1.2rem;
+    color: white !important;
+}
+
+.navbar-nav .nav-link {
+    color: rgba(255, 255, 255, 0.8) !important;
+    padding: 0.5rem 1rem;
+}
+
+.navbar-nav .nav-link:hover,
+.navbar-nav .nav-link:focus {
+    color: #fff !important;
+}
+
+.navbar-nav .dropdown-menu {
+    margin-top: 0.5rem;
+    border: none;
+    box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+}
+
+/* Sidebar Styling */
+#sidebar {
+    min-width: var(--sidebar-width);
+    max-width: var(--sidebar-width);
+    background: #2c3e50;
+    color: #fff;
+    transition: all 0.3s;
+    height: calc(100vh - var(--header-height));
+    position: fixed;
+    top: var(--header-height);
+    left: 0;
+    z-index: 1020;
+    overflow-y: auto;
+}
+
+#sidebar .sidebar-header {
+    padding: 1.5rem 1rem;
+    background: #1a252f;
+}
+
+#sidebar ul.components {
+    padding: 0;
+    border-bottom: 1px solid #47748b;
+}
+
+#sidebar ul li a {
+    padding: 0.75rem 1.25rem;
+    font-size: 0.9rem;
+    display: block;
+    color: rgba(255, 255, 255, 0.8);
+    text-decoration: none;
+}
+
+#sidebar ul li a:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+#sidebar ul li.active > a {
+    color: #fff;
+    background: var(--primary-color);
+}
+
+#sidebar ul li > a i {
+    margin-right: 0.5rem;
+    width: 20px;
+    text-align: center;
+}
+
+#sidebar .dropdown-toggle::after {
+    display: block;
+    position: absolute;
+    top: 50%;
+    right: 20px;
+    transform: translateY(-50%);
+}
+
+#sidebar .submenu {
+    margin-left: 1rem;
+}
+
+#sidebar .submenu a {
+    font-size: 0.85rem;
+    padding: 0.5rem 1rem 0.5rem 2.5rem;
+}
+
+/* Content Area */
+#content {
+    width: 100%;
+    min-height: 100vh;
+    padding: 1rem;
+    margin-left: var(--sidebar-width);
+    transition: all 0.3s;
+}
+
+/* When sidebar is collapsed */
+body.sidebar-collapsed #sidebar {
+    margin-left: calc(-1 * var(--sidebar-width));
+}
+
+body.sidebar-collapsed #content {
+    margin-left: 0;
+}
+
+/* For smaller screens */
+@media (max-width: 768px) {
+    #sidebar {
+        margin-left: calc(-1 * var(--sidebar-width));
+    }
+    
+    #content {
+        margin-left: 0;
+    }
+    
+    body.sidebar-active #sidebar {
+        margin-left: 0;
+    }
+    
+    body.sidebar-active #content {
+        margin-left: var(--sidebar-width);
+    }
+}
+
+/* Container chính */
+.container-fluid {
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+}
+
+/* Card styling */
+.card {
+    border: none;
+    border-radius: 0.35rem;
+    box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+}
+
+.card-header {
+    background-color: #f8f9fc;
+    border-bottom: 1px solid #e3e6f0;
+}
+
+/* Button styling */
+.btn-primary {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.btn-success {
+    background-color: var(--secondary-color);
+    border-color: var(--secondary-color);
+}
+
+/* Alerts styling */
+.alert {
+    border-radius: 0.35rem;
+}
+
+/* Breadcrumb styling */
+.breadcrumb {
+    background-color: transparent;
+    padding: 0.75rem 0;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+}
+
+/* Page header */
+.page-header {
+    margin-bottom: 1.5rem;
+}
+
+.page-header h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+/* Tabs styling */
+.nav-tabs .nav-link {
+    border: none;
+    border-bottom: 2px solid transparent;
+}
+
+.nav-tabs .nav-link.active {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+/* Table styling */
+.table thead th {
+    border-bottom: 2px solid #e3e6f0;
+    font-weight: 600;
+    background-color: #f8f9fc;
+    color: var(--dark-color);
+}

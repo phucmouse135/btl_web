@@ -19,8 +19,6 @@ $search = isset($_GET['search']) ? sanitizeInput($_GET['search']) : '';
 $status = isset($_GET['status']) ? sanitizeInput($_GET['status']) : 'all';
 $priority = isset($_GET['priority']) ? sanitizeInput($_GET['priority']) : 'all';
 $issueType = isset($_GET['issue_type']) ? sanitizeInput($_GET['issue_type']) : 'all';
-$building = isset($_GET['building']) ? sanitizeInput($_GET['building']) : 'all';
-$assignedTo = isset($_GET['assigned_to']) ? sanitizeInput($_GET['assigned_to']) : 'all';
 $currentPage = isset($_GET['page']) ? (int)$_GET['page'] : 1;
 $limit = 10;
 $offset = ($currentPage - 1) * $limit;
@@ -29,21 +27,17 @@ $totalRequests = 0;
 // Xây dựng truy vấn dựa trên vai trò người dùng và bộ lọc
 $countQuery = "SELECT COUNT(*) as total FROM maintenance_requests mr
                JOIN rooms r ON mr.room_id = r.id
-               JOIN buildings b ON r.building_id = b.id
                LEFT JOIN users u ON mr.reported_by = u.id";
                
-$query = "SELECT mr.*, r.room_number, b.name as building_name, 
+$query = "SELECT mr.*, r.room_number, r.building_name, 
           CONCAT(u.first_name, ' ', u.last_name) as reported_by_name,
-          (SELECT COUNT(*) FROM maintenance_photos WHERE request_id = mr.id) as photo_count,
           (CASE WHEN mr.assigned_to IS NOT NULL THEN
             (SELECT CONCAT(u_staff.first_name, ' ', u_staff.last_name) 
              FROM users u_staff 
-             JOIN staff s ON u_staff.id = s.user_id
-             WHERE s.id = mr.assigned_to)
+             WHERE u_staff.id = mr.assigned_to)
            ELSE NULL END) as assigned_to_name
           FROM maintenance_requests mr
           JOIN rooms r ON mr.room_id = r.id
-          JOIN buildings b ON r.building_id = b.id
           LEFT JOIN users u ON mr.reported_by = u.id";
           
 $whereClause = [];
@@ -57,25 +51,14 @@ if (!$isAdminView && hasRole('student')) {
     $types .= "i";
 } elseif (!$isAdminView && hasRole('staff') && !hasRole('admin')) {
     // Nếu giao diện sinh viên và người dùng là nhân viên không phải admin, hiển thị các yêu cầu được phân công
-    $staffIdQuery = "SELECT id FROM staff WHERE user_id = ?";
-    $staffStmt = $conn->prepare($staffIdQuery);
-    $staffStmt->bind_param("i", $_SESSION['user_id']);
-    $staffStmt->execute();
-    $staffResult = $staffStmt->get_result();
-    
-    if ($staffResult->num_rows > 0) {
-        $staffData = $staffResult->fetch_assoc();
-        $staffId = $staffData['id'];
-        $whereClause[] = "(mr.assigned_to = ? OR mr.assigned_to IS NULL)";
-        array_push($params, $staffId);
-        $types .= "i";
-    }
-    $staffStmt->close();
+    $whereClause[] = "(mr.assigned_to = ? OR mr.assigned_to IS NULL)";
+    array_push($params, $_SESSION['user_id']);
+    $types .= "i";
 }
 
 // Bộ lọc tìm kiếm
 if (!empty($search)) {
-    $whereClause[] = "(mr.id LIKE ? OR r.room_number LIKE ? OR b.name LIKE ? OR mr.description LIKE ?)";
+    $whereClause[] = "(mr.id LIKE ? OR r.room_number LIKE ? OR r.building_name LIKE ? OR mr.description LIKE ?)";
     $searchParam = "%$search%";
     array_push($params, $searchParam, $searchParam, $searchParam, $searchParam);
     $types .= "ssss";
@@ -102,24 +85,6 @@ if ($issueType != 'all') {
     $types .= "s";
 }
 
-// Bộ lọc tòa nhà (chỉ cho giao diện admin)
-if ($isAdminView && $building != 'all') {
-    $whereClause[] = "b.id = ?";
-    array_push($params, $building);
-    $types .= "i";
-}
-
-// Bộ lọc theo nhân viên được phân công (chỉ cho giao diện admin)
-if ($isAdminView && $assignedTo != 'all') {
-    if ($assignedTo === 'unassigned') {
-        $whereClause[] = "mr.assigned_to IS NULL";
-    } else {
-        $whereClause[] = "mr.assigned_to = ?";
-        array_push($params, $assignedTo);
-        $types .= "i";
-    }
-}
-
 // Áp dụng mệnh đề WHERE nếu cần
 if (!empty($whereClause)) {
     $query .= " WHERE " . implode(" AND ", $whereClause);
@@ -129,17 +94,16 @@ if (!empty($whereClause)) {
 $query .= " ORDER BY CASE mr.priority 
                       WHEN 'emergency' THEN 1 
                       WHEN 'high' THEN 2 
-                      WHEN 'normal' THEN 3 
+                      WHEN 'medium' THEN 3 
                       WHEN 'low' THEN 4 
                       ELSE 5 
                     END, 
                     CASE mr.status 
                       WHEN 'pending' THEN 1 
                       WHEN 'in_progress' THEN 2 
-                      WHEN 'scheduled' THEN 3 
-                      WHEN 'completed' THEN 4 
-                      WHEN 'canceled' THEN 5 
-                      ELSE 6 
+                      WHEN 'completed' THEN 3 
+                      WHEN 'rejected' THEN 4
+                      ELSE 5 
                     END,
                     mr.request_date DESC
                     LIMIT ? OFFSET ?";
@@ -180,13 +144,8 @@ $totalPages = ceil($totalRequests / $limit);
 // Lấy danh sách yêu cầu bảo trì
 $queryStmt = $conn->prepare($query);
 if ($queryStmt) {
-    // Chúng ta cần xử lý tham số LIMIT và OFFSET một cách chính xác
-    if (!empty($whereClause)) {
-        // Nếu có tham số mệnh đề WHERE, sử dụng mảng tham số đầy đủ
+    if (!empty($params)) {
         $queryStmt->bind_param($types, ...$params);
-    } else {
-        // Nếu không có mệnh đề WHERE, nhưng vẫn cần gắn LIMIT và OFFSET
-        $queryStmt->bind_param("ii", $limit, $offset);
     }
     
     $queryStmt->execute();
@@ -217,43 +176,7 @@ if ($issueTypeResult && !is_bool($issueTypeResult)) {
 } else {
     error_log("Lỗi SQL trong truy vấn lấy loại sự cố: " . $conn->error);
     // Đảm bảo $issueTypes không rỗng nếu truy vấn thất bại
-    $issueTypes = ['plumbing', 'electrical', 'furniture', 'hvac', 'other']; // Các loại mặc định
-}
-
-// Lấy danh sách tòa nhà cho bộ lọc
-$buildings = [];
-if ($isAdminView) {
-    $buildingQuery = "SELECT id, name FROM buildings ORDER BY name";
-    $buildingResult = $conn->query($buildingQuery);
-    
-    // Bảo vệ với kiểm tra nghiêm ngặt hơn
-    if ($buildingResult && !is_bool($buildingResult)) {
-        while ($row = $buildingResult->fetch_assoc()) {
-            $buildings[] = $row;
-        }
-    } else {
-        error_log("Lỗi SQL trong truy vấn lấy danh sách tòa nhà: " . $conn->error);
-    }
-}
-
-// Lấy danh sách nhân viên cho bộ lọc
-$staff = [];
-if ($isAdminView) {
-    $staffQuery = "SELECT s.id, CONCAT(s.first_name, ' ', s.last_name) as name 
-                   FROM staff s 
-                   JOIN users u ON s.user_id = u.id
-                   WHERE u.status = 'active'
-                   ORDER BY s.last_name, s.first_name";
-    $staffResult = $conn->query($staffQuery);
-    
-    // Bảo vệ với kiểm tra nghiêm ngặt hơn
-    if ($staffResult && !is_bool($staffResult)) {
-        while ($row = $staffResult->fetch_assoc()) {
-            $staff[] = $row;
-        }
-    } else {
-        error_log("Lỗi SQL trong truy vấn lấy danh sách nhân viên: " . $conn->error);
-    }
+    $issueTypes = ['Plumbing', 'Electrical', 'Furniture', 'HVAC', 'Other']; // Các loại mặc định
 }
 
 // Xử lý các hành động
@@ -274,14 +197,13 @@ if (isset($_GET['action']) && isset($_GET['id'])) {
         $requestData = $checkResult->fetch_assoc();
         
         if ($action === 'cancel' && hasRole('student')) {
-            // Chỉ cho phép hủy nếu yêu cầu đang chờ xử lý hoặc đã lên lịch
-            if (in_array($requestData['status'], ['pending', 'scheduled'])) {
-                $updateStmt = $conn->prepare("UPDATE maintenance_requests SET status = 'canceled' WHERE id = ? AND reported_by = ?");
+            // Chỉ cho phép hủy nếu yêu cầu đang chờ xử lý
+            if ($requestData['status'] == 'pending') {
+                $updateStmt = $conn->prepare("UPDATE maintenance_requests SET status = 'rejected' WHERE id = ? AND reported_by = ?");
                 $updateStmt->bind_param("ii", $id, $_SESSION['user_id']);
                 
                 if ($updateStmt->execute() && $updateStmt->affected_rows > 0) {
                     $message = "Yêu cầu bảo trì #" . sprintf('%06d', $id) . " đã được hủy bỏ.";
-                    logActivity('maintenance_request', "Đã hủy yêu cầu bảo trì #" . sprintf('%06d', $id));
                 } else {
                     $error = "Không thể hủy yêu cầu. Bạn chỉ có thể hủy yêu cầu của chính mình.";
                 }
@@ -294,42 +216,28 @@ if (isset($_GET['action']) && isset($_GET['id'])) {
             // Hành động của nhân viên
             switch ($action) {
                 case 'in_progress':
-                    // Lấy staff_id của người dùng hiện tại
-                    $staffIdQuery = "SELECT id FROM staff WHERE user_id = ?";
-                    $staffStmt = $conn->prepare($staffIdQuery);
-                    $staffStmt->bind_param("i", $_SESSION['user_id']);
-                    $staffStmt->execute();
-                    $staffResult = $staffStmt->get_result();
-                    $staffId = null;
-                    
-                    if ($staffResult->num_rows > 0) {
-                        $staffData = $staffResult->fetch_assoc();
-                        $staffId = $staffData['id'];
-                    }
-                    $staffStmt->close();
-                    
                     $updateStmt = $conn->prepare("UPDATE maintenance_requests SET status = 'in_progress', assigned_to = ? WHERE id = ?");
-                    $updateStmt->bind_param("ii", $staffId, $id);
+                    $updateStmt->bind_param("ii", $_SESSION['user_id'], $id);
                     break;
                     
                 case 'complete':
                     $updateStmt = $conn->prepare("
                         UPDATE maintenance_requests 
-                        SET status = 'completed', completed_date = CURRENT_DATE(), completed_by = ? 
+                        SET status = 'completed', completed_date = CURRENT_DATE()
                         WHERE id = ?
                     ");
-                    $updateStmt->bind_param("ii", $_SESSION['user_id'], $id);
+                    $updateStmt->bind_param("i", $id);
                     break;
                     
-                case 'schedule':
-                    $updateStmt = $conn->prepare("UPDATE maintenance_requests SET status = 'scheduled' WHERE id = ?");
+                case 'reject':
+                    $updateStmt = $conn->prepare("UPDATE maintenance_requests SET status = 'rejected' WHERE id = ?");
                     $updateStmt->bind_param("i", $id);
                     break;
                     
                 case 'reopen':
                     $updateStmt = $conn->prepare("
                         UPDATE maintenance_requests 
-                        SET status = 'pending', completed_date = NULL, completed_by = NULL 
+                        SET status = 'pending', completed_date = NULL
                         WHERE id = ?
                     ");
                     $updateStmt->bind_param("i", $id);
@@ -339,33 +247,6 @@ if (isset($_GET['action']) && isset($_GET['id'])) {
             if (isset($updateStmt)) {
                 if ($updateStmt->execute()) {
                     $message = "Yêu cầu bảo trì #" . sprintf('%06d', $id) . " đã được cập nhật thành " . str_replace('_', ' ', $action) . ".";
-                    logActivity('maintenance_request', "Đã cập nhật yêu cầu bảo trì #" . sprintf('%06d', $id) . " thành " . str_replace('_', ' ', $action));
-                    
-                    // Thêm thông báo cho sinh viên
-                    // Lấy user_id của sinh viên đã báo cáo yêu cầu
-                    $getReporterQuery = "SELECT reported_by FROM maintenance_requests WHERE id = ?";
-                    $reporterStmt = $conn->prepare($getReporterQuery);
-                    $reporterStmt->bind_param("i", $id);
-                    $reporterStmt->execute();
-                    $reporterResult = $reporterStmt->get_result();
-                    
-                    if ($reporterResult->num_rows > 0) {
-                        $reporterData = $reporterResult->fetch_assoc();
-                        $reporterId = $reporterData['reported_by'];
-                        
-                        // Tạo thông báo cho sinh viên
-                        $notificationTitle = "Cập nhật yêu cầu bảo trì #" . sprintf('%06d', $id);
-                        $notificationContent = "Yêu cầu bảo trì của bạn đã được cập nhật thành: " . ucfirst(str_replace('_', ' ', $action));
-                        
-                        createNotification(
-                            $reporterId,
-                            'maintenance_update',
-                            $notificationTitle,
-                            $notificationContent,
-                            "/LTW/views/maintenance/view.php?id=$id"
-                        );
-                    }
-                    $reporterStmt->close();
                 } else {
                     $error = "Không thể cập nhật trạng thái yêu cầu.";
                 }
@@ -398,11 +279,15 @@ if (isset($_GET['action']) && isset($_GET['id'])) {
 </div>
 
 <?php if ($message): ?>
-    <?php echo displaySuccess($message); ?>
+    <div class="alert alert-success">
+        <i class="fas fa-check-circle me-2"></i> <?php echo $message; ?>
+    </div>
 <?php endif; ?>
 
 <?php if ($error): ?>
-    <?php echo displayError($error); ?>
+    <div class="alert alert-danger">
+        <i class="fas fa-exclamation-circle me-2"></i> <?php echo $error; ?>
+    </div>
 <?php endif; ?>
 
 <!-- Bộ lọc và Tìm kiếm -->
@@ -412,7 +297,7 @@ if (isset($_GET['action']) && isset($_GET['id'])) {
     </div>
     <div class="card-body">
         <form method="GET" action="" class="row g-3">
-            <div class="<?php echo $isAdminView ? 'col-md-3' : 'col-md-4'; ?>">
+            <div class="col-md-4">
                 <div class="input-group">
                     <input type="text" class="form-control" placeholder="Tìm kiếm yêu cầu..." name="search" value="<?php echo $search; ?>">
                     <button class="btn btn-primary" type="submit">
@@ -420,81 +305,37 @@ if (isset($_GET['action']) && isset($_GET['id'])) {
                     </button>
                 </div>
             </div>
-            <div class="<?php echo $isAdminView ? 'col-md-2' : 'col-md-2'; ?>">
+            <div class="col-md-2">
                 <select class="form-select" name="status" onchange="this.form.submit()">
                     <option value="all" <?php echo $status == 'all' ? 'selected' : ''; ?>>Tất cả trạng thái</option>
                     <option value="pending" <?php echo $status == 'pending' ? 'selected' : ''; ?>>Đang chờ</option>
                     <option value="in_progress" <?php echo $status == 'in_progress' ? 'selected' : ''; ?>>Đang xử lý</option>
-                    <option value="scheduled" <?php echo $status == 'scheduled' ? 'selected' : ''; ?>>Đã lên lịch</option>
                     <option value="completed" <?php echo $status == 'completed' ? 'selected' : ''; ?>>Hoàn thành</option>
-                    <option value="canceled" <?php echo $status == 'canceled' ? 'selected' : ''; ?>>Đã hủy</option>
+                    <option value="rejected" <?php echo $status == 'rejected' ? 'selected' : ''; ?>>Đã hủy</option>
                 </select>
             </div>
-            <div class="<?php echo $isAdminView ? 'col-md-2' : 'col-md-2'; ?>">
+            <div class="col-md-2">
                 <select class="form-select" name="priority" onchange="this.form.submit()">
                     <option value="all" <?php echo $priority == 'all' ? 'selected' : ''; ?>>Tất cả độ ưu tiên</option>
                     <option value="low" <?php echo $priority == 'low' ? 'selected' : ''; ?>>Thấp</option>
-                    <option value="normal" <?php echo $priority == 'normal' ? 'selected' : ''; ?>>Bình thường</option>
+                    <option value="medium" <?php echo $priority == 'medium' ? 'selected' : ''; ?>>Bình thường</option>
                     <option value="high" <?php echo $priority == 'high' ? 'selected' : ''; ?>>Cao</option>
                     <option value="emergency" <?php echo $priority == 'emergency' ? 'selected' : ''; ?>>Khẩn cấp</option>
                 </select>
             </div>
-            <div class="<?php echo $isAdminView ? 'col-md-2' : 'col-md-2'; ?>">
+            <div class="col-md-2">
                 <select class="form-select" name="issue_type" onchange="this.form.submit()">
                     <option value="all" <?php echo $issueType == 'all' ? 'selected' : ''; ?>>Tất cả loại sự cố</option>
                     <?php foreach ($issueTypes as $type): ?>
                         <option value="<?php echo $type; ?>" <?php echo $issueType == $type ? 'selected' : ''; ?>>
-                            <?php echo ucfirst(str_replace('_', ' ', $type)); ?>
+                            <?php echo ucfirst($type); ?>
                         </option>
                     <?php endforeach; ?>
                 </select>
             </div>
-            
-            <?php if ($isAdminView): ?>
-            <!-- Bộ lọc bổ sung cho giao diện Admin -->
-            <div class="col-md-2">
-                <select class="form-select" name="building" onchange="this.form.submit()">
-                    <option value="all" <?php echo $building == 'all' ? 'selected' : ''; ?>>Tất cả tòa nhà</option>
-                    <?php foreach ($buildings as $b): ?>
-                        <option value="<?php echo $b['id']; ?>" <?php echo $building == $b['id'] ? 'selected' : ''; ?>>
-                            <?php echo $b['name']; ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <div class="col-md-2">
-                <select class="form-select" name="assigned_to" onchange="this.form.submit()">
-                    <option value="all" <?php echo $assignedTo == 'all' ? 'selected' : ''; ?>>Tất cả nhân viên</option>
-                    <option value="unassigned" <?php echo $assignedTo == 'unassigned' ? 'selected' : ''; ?>>Chưa phân công</option>
-                    <?php foreach ($staff as $s): ?>
-                        <option value="<?php echo $s['id']; ?>" <?php echo $assignedTo == $s['id'] ? 'selected' : ''; ?>>
-                            <?php echo $s['name']; ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <?php else: ?>
             <div class="col-md-2">
                 <button type="submit" class="btn btn-primary w-100">Áp dụng</button>
             </div>
-            <?php endif; ?>
-            
-            <?php if ($isAdminView): ?>
-            <div class="col-md-12 mt-3">
-                <button type="submit" class="btn btn-primary">
-                    <i class="fas fa-filter me-2"></i> Áp dụng Bộ lọc
-                </button>
-                <a href="<?php echo $isAdminView ? '/LTW/views/admin/maintenance/list.php' : '/LTW/views/maintenance/list.php'; ?>" class="btn btn-secondary ms-2">
-                    <i class="fas fa-sync-alt me-2"></i> Xóa Bộ lọc
-                </a>
-                
-                <?php if (hasRole('admin')): ?>
-                <a href="/LTW/exports/export_maintenance.php" class="btn btn-success float-end">
-                    <i class="fas fa-file-excel me-2"></i> Xuất Excel
-                </a>
-                <?php endif; ?>
-            </div>
-            <?php endif; ?>
         </form>
     </div>
 </div>
@@ -527,7 +368,6 @@ if (isset($_GET['action']) && isset($_GET['id'])) {
                             <th>Phân công cho</th>
                             <?php endif; ?>
                             <th>Ngày</th>
-                            <th>Ảnh</th>
                             <th>Thao tác</th>
                         </tr>
                     </thead>
@@ -555,15 +395,11 @@ if (isset($_GET['action']) && isset($_GET['id'])) {
                                     $statusBadgeClass = 'bg-info';
                                     $statusText = 'Đang xử lý';
                                     break;
-                                case 'scheduled':
-                                    $statusBadgeClass = 'bg-primary';
-                                    $statusText = 'Đã lên lịch';
-                                    break;
                                 case 'completed':
                                     $statusBadgeClass = 'bg-success';
                                     $statusText = 'Hoàn thành';
                                     break;
-                                case 'canceled':
+                                case 'rejected':
                                     $statusBadgeClass = 'bg-secondary';
                                     $statusText = 'Đã hủy';
                                     break;
@@ -578,7 +414,7 @@ if (isset($_GET['action']) && isset($_GET['id'])) {
                                     $priorityBadgeClass = 'bg-success';
                                     $priorityText = 'Thấp';
                                     break;
-                                case 'normal':
+                                case 'medium':
                                     $priorityBadgeClass = 'bg-primary';
                                     $priorityText = 'Bình thường';
                                     break;
@@ -602,7 +438,7 @@ if (isset($_GET['action']) && isset($_GET['id'])) {
                                     <?php echo $req['building_name'] . ' - ' . $req['room_number']; ?>
                                 </td>
                                 <td>
-                                    <?php echo ucfirst(str_replace('_', ' ', $req['issue_type'])); ?>
+                                    <?php echo ucfirst($req['issue_type']); ?>
                                 </td>
                                 <td>
                                     <span class="badge <?php echo $priorityBadgeClass; ?>">
@@ -630,15 +466,6 @@ if (isset($_GET['action']) && isset($_GET['id'])) {
                                     <?php echo date('d/m/Y', strtotime($req['request_date'])); ?>
                                 </td>
                                 <td>
-                                    <?php if ($req['photo_count'] > 0): ?>
-                                        <span class="badge bg-info">
-                                            <i class="fas fa-image me-1"></i> <?php echo $req['photo_count']; ?>
-                                        </span>
-                                    <?php else: ?>
-                                        <span class="text-muted">Không có</span>
-                                    <?php endif; ?>
-                                </td>
-                                <td>
                                     <div class="btn-group btn-group-sm">
                                         <a href="<?php echo $isAdminView ? '/LTW/views/admin/maintenance/view.php?id=' . $req['id'] : '/LTW/views/maintenance/view.php?id=' . $req['id']; ?>" class="btn btn-info">
                                             <i class="fas fa-eye"></i>
@@ -649,18 +476,14 @@ if (isset($_GET['action']) && isset($_GET['id'])) {
                                                 <a href="?action=in_progress&id=<?php echo $req['id']; ?>&page=<?php echo $currentPage; ?><?php echo isset($_SERVER['QUERY_STRING']) ? '&' . http_build_query(array_diff_key($_GET, array_flip(['action', 'id', 'page']))) : ''; ?>" class="btn btn-primary">
                                                     <i class="fas fa-play"></i> Bắt đầu
                                                 </a>
-                                                <a href="?action=schedule&id=<?php echo $req['id']; ?>&page=<?php echo $currentPage; ?><?php echo isset($_SERVER['QUERY_STRING']) ? '&' . http_build_query(array_diff_key($_GET, array_flip(['action', 'id', 'page']))) : ''; ?>" class="btn btn-secondary">
-                                                    <i class="fas fa-calendar"></i> Lên lịch
+                                                <a href="?action=reject&id=<?php echo $req['id']; ?>&page=<?php echo $currentPage; ?><?php echo isset($_SERVER['QUERY_STRING']) ? '&' . http_build_query(array_diff_key($_GET, array_flip(['action', 'id', 'page']))) : ''; ?>" class="btn btn-secondary">
+                                                    <i class="fas fa-times"></i> Từ chối
                                                 </a>
                                             <?php elseif ($req['status'] == 'in_progress'): ?>
                                                 <a href="?action=complete&id=<?php echo $req['id']; ?>&page=<?php echo $currentPage; ?><?php echo isset($_SERVER['QUERY_STRING']) ? '&' . http_build_query(array_diff_key($_GET, array_flip(['action', 'id', 'page']))) : ''; ?>" class="btn btn-success">
                                                     <i class="fas fa-check"></i> Hoàn thành
                                                 </a>
-                                            <?php elseif ($req['status'] == 'scheduled'): ?>
-                                                <a href="?action=in_progress&id=<?php echo $req['id']; ?>&page=<?php echo $currentPage; ?><?php echo isset($_SERVER['QUERY_STRING']) ? '&' . http_build_query(array_diff_key($_GET, array_flip(['action', 'id', 'page']))) : ''; ?>" class="btn btn-primary">
-                                                    <i class="fas fa-play"></i> Bắt đầu
-                                                </a>
-                                            <?php elseif ($req['status'] == 'completed'): ?>
+                                            <?php elseif ($req['status'] == 'completed' || $req['status'] == 'rejected'): ?>
                                                 <a href="?action=reopen&id=<?php echo $req['id']; ?>&page=<?php echo $currentPage; ?><?php echo isset($_SERVER['QUERY_STRING']) ? '&' . http_build_query(array_diff_key($_GET, array_flip(['action', 'id', 'page']))) : ''; ?>" class="btn btn-warning">
                                                     <i class="fas fa-redo"></i> Mở lại
                                                 </a>
@@ -684,7 +507,7 @@ if (isset($_GET['action']) && isset($_GET['id'])) {
                     <ul class="pagination justify-content-center mt-4">
                         <?php if ($currentPage > 1): ?>
                             <li class="page-item">
-                                <a class="page-link" href="?page=<?php echo $currentPage - 1; ?>&search=<?php echo urlencode($search); ?>&status=<?php echo $status; ?>&priority=<?php echo $priority; ?>&issue_type=<?php echo $issueType; ?><?php echo $isAdminView ? '&building=' . $building . '&assigned_to=' . $assignedTo : ''; ?>">
+                                <a class="page-link" href="?page=<?php echo $currentPage - 1; ?>&search=<?php echo urlencode($search); ?>&status=<?php echo $status; ?>&priority=<?php echo $priority; ?>&issue_type=<?php echo $issueType; ?>">
                                     <i class="fas fa-chevron-left"></i>
                                 </a>
                             </li>
@@ -701,7 +524,7 @@ if (isset($_GET['action']) && isset($_GET['id'])) {
                         $endPage = min($totalPages, $currentPage + 2);
                         
                         if ($startPage > 1) {
-                            echo '<li class="page-item"><a class="page-link" href="?page=1&search=' . urlencode($search) . '&status=' . $status . '&priority=' . $priority . '&issue_type=' . $issueType . ($isAdminView ? '&building=' . $building . '&assigned_to=' . $assignedTo : '') . '">1</a></li>';
+                            echo '<li class="page-item"><a class="page-link" href="?page=1&search=' . urlencode($search) . '&status=' . $status . '&priority=' . $priority . '&issue_type=' . $issueType . '">1</a></li>';
                             if ($startPage > 2) {
                                 echo '<li class="page-item disabled"><a class="page-link" href="#">...</a></li>';
                             }
@@ -711,7 +534,7 @@ if (isset($_GET['action']) && isset($_GET['id'])) {
                             if ($i == $currentPage) {
                                 echo '<li class="page-item active"><a class="page-link" href="#">' . $i . '</a></li>';
                             } else {
-                                echo '<li class="page-item"><a class="page-link" href="?page=' . $i . '&search=' . urlencode($search) . '&status=' . $status . '&priority=' . $priority . '&issue_type=' . $issueType . ($isAdminView ? '&building=' . $building . '&assigned_to=' . $assignedTo : '') . '">' . $i . '</a></li>';
+                                echo '<li class="page-item"><a class="page-link" href="?page=' . $i . '&search=' . urlencode($search) . '&status=' . $status . '&priority=' . $priority . '&issue_type=' . $issueType . '">' . $i . '</a></li>';
                             }
                         }
                         
@@ -719,13 +542,13 @@ if (isset($_GET['action']) && isset($_GET['id'])) {
                             if ($endPage < $totalPages - 1) {
                                 echo '<li class="page-item disabled"><a class="page-link" href="#">...</a></li>';
                             }
-                            echo '<li class="page-item"><a class="page-link" href="?page=' . $totalPages . '&search=' . urlencode($search) . '&status=' . $status . '&priority=' . $priority . '&issue_type=' . $issueType . ($isAdminView ? '&building=' . $building . '&assigned_to=' . $assignedTo : '') . '">' . $totalPages . '</a></li>';
+                            echo '<li class="page-item"><a class="page-link" href="?page=' . $totalPages . '&search=' . urlencode($search) . '&status=' . $status . '&priority=' . $priority . '&issue_type=' . $issueType . '">' . $totalPages . '</a></li>';
                         }
                         ?>
                         
                         <?php if ($currentPage < $totalPages): ?>
                             <li class="page-item">
-                                <a class="page-link" href="?page=<?php echo $currentPage + 1; ?>&search=<?php echo urlencode($search); ?>&status=<?php echo $status; ?>&priority=<?php echo $priority; ?>&issue_type=<?php echo $issueType; ?><?php echo $isAdminView ? '&building=' . $building . '&assigned_to=' . $assignedTo : ''; ?>">
+                                <a class="page-link" href="?page=<?php echo $currentPage + 1; ?>&search=<?php echo urlencode($search); ?>&status=<?php echo $status; ?>&priority=<?php echo $priority; ?>&issue_type=<?php echo $issueType; ?>">
                                     <i class="fas fa-chevron-right"></i>
                                 </a>
                             </li>
@@ -742,12 +565,6 @@ if (isset($_GET['action']) && isset($_GET['id'])) {
         <?php endif; ?>
     </div>
 </div>
-
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Tùy chọn: Thêm chức năng JavaScript nếu cần
-});
-</script>
 
 <?php
 // Include footer

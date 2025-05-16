@@ -1,4 +1,6 @@
 <?php
+// Bắt đầu output buffering
+ob_start();
 // Bao gồm các tệp cần thiết
 require_once $_SERVER['DOCUMENT_ROOT'] . '/LTW/config/database.php';
 require_once $_SERVER['DOCUMENT_ROOT'] . '/LTW/config/functions.php';

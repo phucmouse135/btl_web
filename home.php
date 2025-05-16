@@ -241,7 +241,7 @@ $pageTitle = "Hệ Thống Quản Lý Ký Túc Xá";
                     </div>
                 </div>
                 <div class="col-lg-6">
-                    <img src="assets/images/dormitory-management.jpg" alt="Hệ thống quản lý ký túc xá" class="img-fluid rounded shadow">
+                    <img src="assets/images/ktx.jpg" alt="Hệ thống quản lý ký túc xá" class="img-fluid rounded shadow">
                 </div>
             </div>
         </div>
@@ -331,22 +331,22 @@ $pageTitle = "Hệ Thống Quản Lý Ký Túc Xá";
             
             <div class="row justify-content-center align-items-center g-4">
                 <div class="col-6 col-md-4 col-lg-2 text-center">
-                    <img src="assets/images/partners/partner1.png" alt="Partner 1" class="img-fluid partner-logo">
+                    <img src="https://randomuser.me/api/portraits/men/1.jpg" alt="Partner 1" class="img-fluid partner-logo">
                 </div>
                 <div class="col-6 col-md-4 col-lg-2 text-center">
-                    <img src="assets/images/partners/partner2.png" alt="Partner 2" class="img-fluid partner-logo">
+                    <img src="https://randomuser.me/api/portraits/men/1.jpg" alt="Partner 2" class="img-fluid partner-logo">
                 </div>
                 <div class="col-6 col-md-4 col-lg-2 text-center">
-                    <img src="assets/images/partners/partner3.png" alt="Partner 3" class="img-fluid partner-logo">
+                    <img src="https://randomuser.me/api/portraits/men/1.jpg" alt="Partner 3" class="img-fluid partner-logo">
                 </div>
                 <div class="col-6 col-md-4 col-lg-2 text-center">
-                    <img src="assets/images/partners/partner1.png" alt="Partner 4" class="img-fluid partner-logo">
+                    <img src="https://randomuser.me/api/portraits/men/1.jpg" alt="Partner 4" class="img-fluid partner-logo">
                 </div>
                 <div class="col-6 col-md-4 col-lg-2 text-center">
-                    <img src="assets/images/partners/partner2.png" alt="Partner 5" class="img-fluid partner-logo">
+                    <img src="https://randomuser.me/api/portraits/men/1.jpg" alt="Partner 5" class="img-fluid partner-logo">
                 </div>
                 <div class="col-6 col-md-4 col-lg-2 text-center">
-                    <img src="assets/images/partners/partner3.png" alt="Partner 6" class="img-fluid partner-logo">
+                    <img src="https://randomuser.me/api/portraits/men/1.jpg" alt="Partner 6" class="img-fluid partner-logo">
                 </div>
             </div>
         </div>

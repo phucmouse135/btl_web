@@ -22,20 +22,17 @@ $message = '';
 $error = '';
 
 // Lấy chi tiết yêu cầu
-$query = "SELECT mr.*, r.room_number, r.floor, b.name as building_name, b.id as building_id,
-          CONCAT(reporter.first_name, ' ', reporter.last_name) as reported_by_name,
-          CONCAT(completer.first_name, ' ', completer.last_name) as completed_by_name,
-          reporter.email as reporter_email,
-          completer.email as completer_email
-          FROM maintenance_requests mr
-          JOIN rooms r ON mr.room_id = r.id
-          JOIN buildings b ON r.building_id = b.id
-          LEFT JOIN users reporter ON mr.reported_by = reporter.id
-          LEFT JOIN users completer ON mr.completed_by = completer.id
-          WHERE mr.id = ?";
+$query = "SELECT * FROM maintenance_requests WHERE id = ?";
+
+// Debug the current query
+echo "<!-- Debug: " . htmlspecialchars($query) . " -->";
 
 $stmt = $conn->prepare($query);
-$stmt->bind_param("i", $requestId);
+if ($stmt === false) {
+    die("Error in SQL query: " . $conn->error . "<br>Query: " . htmlspecialchars($query));
+}
+$stmt->bind_param("i", $_GET['id']);
+
 $stmt->execute();
 $result = $stmt->get_result();
 
@@ -422,7 +419,7 @@ switch ($request['priority']) {
                             </tr>
                             <tr>
                                 <th>Vị trí:</th>
-                                <td><?php echo $request['building_name'] . ' - Phòng ' . $request['room_number'] . ' (Tầng ' . $request['floor'] . ')'; ?></td>
+                                <td><?php echo 'Phòng ' . $request['room_number'] . ' (Tầng ' . $request['floor'] . ')'; ?></td>
                             </tr>
                             <tr>
                                 <th>Ngày Báo cáo:</th>

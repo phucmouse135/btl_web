@@ -1,7 +1,7 @@
 <?php
 // Include cơ sở dữ liệu và các hàm
-require_once '../config/database.php';
-require_once '../config/functions.php';
+require_once 'C:\xampp\htdocs\LTW\config\database.php';
+require_once 'C:\xampp\htdocs\LTW\config\functions.php';
 
 // Yêu cầu đăng nhập để truy cập trang này
 requireLogin();
@@ -69,7 +69,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['change_password'])) {
 }
 
 // Include header
-require_once '../includes/header.php';
+require_once 'C:\xampp\htdocs\LTW\includes\header.php';
 ?>
 
 <div class="container-fluid">
@@ -134,5 +134,5 @@ require_once '../includes/header.php';
 
 <?php
 // Include footer
-require_once '../includes/footer.php';
+require_once 'C:\xampp\htdocs\LTW\includes\footer.php';
 ?>

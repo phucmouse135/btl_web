@@ -1,4 +1,6 @@
 <?php
+// Bắt đầu output buffering
+ob_start();
 // Include các tệp cần thiết
 require_once '../../config/database.php';
 require_once '../../config/functions.php';

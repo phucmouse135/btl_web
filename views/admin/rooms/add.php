@@ -1,4 +1,6 @@
 <?php
+// Bắt đầu output buffering
+ob_start();
 require_once $_SERVER['DOCUMENT_ROOT'] . '/LTW/config/database.php';
 require_once $_SERVER['DOCUMENT_ROOT'] . '/LTW/config/functions.php';
 
@@ -199,4 +201,6 @@ document.addEventListener('DOMContentLoaded', function() {
 <?php
 // Bao gồm footer
 require_once $_SERVER['DOCUMENT_ROOT'] . '/LTW/includes/footer.php';
+// Kết thúc và xóa bộ đệm
+ob_end_flush();
 ?>

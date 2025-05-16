@@ -51,9 +51,6 @@
                 <div class="col-md-6 mb-3">
                     <h6 class="text-uppercase border-start border-primary border-4 ps-3 mb-3">Đối tác</h6>
                     <div class="partner-logos-container d-flex flex-wrap align-items-center">
-                        <img src="/LTW/assets/images/partners/partner1.png" alt="Partner 1" class="partner-logo mx-2 mb-2">
-                        <img src="/LTW/assets/images/partners/partner2.png" alt="Partner 2" class="partner-logo mx-2 mb-2">
-                        <img src="/LTW/assets/images/partners/partner3.png" alt="Partner 3" class="partner-logo mx-2 mb-2">
                     </div>
                 </div>
             </div>

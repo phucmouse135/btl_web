@@ -1,4 +1,6 @@
 <?php
+// Bắt đầu output buffering
+ob_start();
 // Bao gồm header
 require_once '../../../includes/header.php';
 
@@ -343,5 +345,7 @@ logActivity('view_student', 'Đã xem hồ sơ sinh viên: ' . $student['first_n
 
 <?php
 // Bao gồm footer
-require_once '../../../includes/footer.php';
+require_once $_SERVER['DOCUMENT_ROOT'] . '/LTW/includes/footer.php';
+// Kết thúc và xóa bộ đệm
+ob_end_flush();
 ?>

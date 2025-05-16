@@ -1,4 +1,6 @@
 <?php
+// Bắt đầu output buffering
+ob_start();
 // Bao gồm header
 require_once $_SERVER['DOCUMENT_ROOT'] . '/LTW/includes/header.php';
 
@@ -169,8 +171,7 @@ if (isset($_GET['action']) && isset($_GET['id'])) {
                         <p><strong>Giá thuê hàng tháng:</strong> <?php echo number_format($room['monthly_rent'], 0, ',', '.'); ?> đ</p>
                         <p><strong>Ngày tạo:</strong> <?php echo date('d/m/Y', strtotime($room['created_at'])); ?></p>
                     </div>
-                    <div class="col-md-6 col-lg-3">
-                        <div class="d-grid gap-2">
+                    <div class="col-md-6 col-lg-3">                        <div class="d-grid gap-2">
                             <?php if ($room['status'] != 'maintenance'): ?>
                                 <a class="btn btn-warning" href="?action=set_maintenance&id=<?php echo $roomId; ?>" onclick="return confirm('Đặt phòng này vào chế độ bảo trì?')">
                                     <i class="fas fa-tools me-2"></i> Đặt thành bảo trì
@@ -253,4 +254,6 @@ if (isset($_GET['action']) && isset($_GET['id'])) {
 <?php
 // Bao gồm footer
 require_once $_SERVER['DOCUMENT_ROOT'] . '/LTW/includes/footer.php';
+// Kết thúc và xóa bộ đệm
+ob_end_flush();
 ?>

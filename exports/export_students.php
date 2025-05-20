@@ -27,7 +27,6 @@ $query = "
         u.first_name, 
         u.last_name, 
         u.gender, 
-        u.date_of_birth as dob, 
         u.department, 
         u.phone, 
         u.address, 
@@ -37,7 +36,7 @@ $query = "
     FROM 
         users u
     LEFT JOIN 
-        room_assignments ra ON u.id = ra.student_id AND ra.status = 'active'
+        room_assignments ra ON u.id = ra.user_id
     LEFT JOIN 
         rooms r ON ra.room_id = r.id
     WHERE
@@ -68,8 +67,7 @@ $columns = [
     'Mã Sinh Viên', 
     'Họ', 
     'Tên', 
-    'Giới Tính', 
-    'Ngày Sinh', 
+    'Giới Tính',  
     'Khoa/Ngành', 
     'Số Điện Thoại', 
     'Địa Chỉ', 
@@ -190,11 +188,6 @@ if ($export_type === 'excel') {
         } else {
             $student['gender'] = 'Khác';
         }
-        
-        if ($student['date_of_birth']) {
-            $student['date_of_birth'] = date('d/m/Y', strtotime($student['date_of_birth']));
-        }
-        
         if ($student['status'] === 'active') {
             $student['status'] = 'Đang hoạt động';
         } else {

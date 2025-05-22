@@ -422,10 +422,11 @@ $dormitoryName = getSetting('dormitory_name', 'Hệ thống quản lý ký túc 
                 <?php endif; ?>
             </div>
         </div>
-    </nav>
-
-    <!-- Container Nội dung Chính -->
+    </nav>    <!-- Container Nội dung Chính -->
     <div class="container-fluid py-4">
+        <!-- Container hiển thị phản hồi AJAX -->
+        <div id="ajax-response-container"></div>
+        
         <?php if (isset($_SESSION['alert'])): ?>
             <?php 
                 $alertType = $_SESSION['alert']['type'] ?? 'info';

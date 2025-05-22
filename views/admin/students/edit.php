@@ -4,7 +4,7 @@ ob_start();
 // Bao gồm header
 require_once '../../../includes/header.php';
 
-// Yêu cầu vai trò quản trị viên hoặc nhân viên
+// Yêu cầu vai trò quản trị viên
 if (!hasRole('admin') && !hasRole('staff')) {
     header("Location: /LTW/dashboard.php");
     exit();
@@ -31,7 +31,6 @@ $student = [
     'first_name' => '',
     'last_name' => '',
     'gender' => '',
-    'dob' => '',
     'phone' => '',
     'email' => '',
     'address' => '',
@@ -39,7 +38,7 @@ $student = [
     'year_of_study' => '',
     'username' => '',
     'profile_pic' => '',
-    'status' => 'active'
+    'student_status' => 'active'  // Changed from 'status' to 'student_status' to match DB field
 ];
 
 // Kiểm tra nếu đang yêu cầu thay đổi trạng thái
@@ -83,7 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         
         if ($updateStmt->execute()) {
             $success = "Trạng thái của sinh viên đã được cập nhật thành công thành " . ucfirst($newStatus);
-            $student['status'] = $newStatus;
+            $student['student_status'] = $newStatus; // Update to student_status to match DB field
             
             // Ghi nhật ký hoạt động
             logActivity('update_student_status', "Đã cập nhật trạng thái sinh viên {$student['first_name']} {$student['last_name']} thành {$newStatus}. Lý do: {$statusReason}");
@@ -96,7 +95,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $student['first_name'] = sanitizeInput($_POST['first_name']);
         $student['last_name'] = sanitizeInput($_POST['last_name']);
         $student['gender'] = sanitizeInput($_POST['gender']);
-        $student['dob'] = sanitizeInput($_POST['dob']);
         $student['phone'] = sanitizeInput($_POST['phone']);
         $student['email'] = sanitizeInput($_POST['email']);
         $student['address'] = sanitizeInput($_POST['address']);
@@ -108,7 +106,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         
         // Xác thực dữ liệu biểu mẫu
         if (empty($student['student_id']) || empty($student['first_name']) || empty($student['last_name']) || 
-            empty($student['gender']) || empty($student['dob']) || empty($student['phone']) || 
+            empty($student['gender']) || empty($student['phone']) || 
             empty($student['email']) || empty($student['address']) || empty($student['department']) || 
             empty($student['year_of_study'])) {
             $error = 'Tất cả các trường bắt buộc phải được điền đầy đủ';
@@ -151,18 +149,54 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         $conn->begin_transaction();
                         
                         try {
+                            // Kiểm tra các trường bắt buộc tồn tại
+                            $required_fields = ['username', 'email', 'student_id', 'first_name', 'last_name', 
+                                               'gender', 'phone', 'address', 'department', 'year_of_study'];
+                            
+                            foreach ($required_fields as $field) {
+                                if (!isset($student[$field])) {
+                                    throw new Exception("Lỗi: Thiếu trường '{$field}' trong dữ liệu sinh viên.");
+                                }
+                            }
+                            
+                            // In ra lỗi SQL nếu có và thiết lập SQL mode ít nghiêm ngặt
+                            $conn->query("SET sql_mode = ''");
+                            error_log("SQL mode relaxed before update query");
+                            
                             // Cập nhật tài khoản người dùng và thông tin sinh viên trong cùng một bảng users
                             $userSql = "UPDATE users SET 
-                                       username = ?, email = ?, student_id = ?, first_name = ?, 
-                                       last_name = ?, gender = ?, dob = ?, phone = ?, 
-                                       address = ?, department = ?, year_of_study = ?
+                                       username = ?, 
+                                       email = ?, 
+                                       student_id = ?, 
+                                       first_name = ?, 
+                                       last_name = ?, 
+                                       gender = ?, 
+                                       phone = ?, 
+                                       address = ?, 
+                                       department = ?, 
+                                       year_of_study = ? 
                                        WHERE id = ? AND role = 'student'";
                             
+                            // Debug query for error logging
+                            error_log("SQL Query: " . $userSql);
+                            
                             $stmt = $conn->prepare($userSql);
-                            $stmt->bind_param("ssssssssssii", 
+                            if ($stmt === false) {
+                                error_log("SQL Error: " . $conn->error . " in query: " . $userSql);
+                                throw new Exception("Lỗi chuẩn bị truy vấn SQL: " . $conn->error);
+                            }
+                            
+                            // Debug: Hiển thị thông tin về các trường đang được cập nhật
+                            error_log("Các trường cập nhật: " . print_r(array_keys($student), true));
+                            
+                            error_log("Executing query with " . count([$student["username"], $student["email"], $student["student_id"], 
+                                           $student["first_name"], $student["last_name"], $student["gender"], 
+                                           $student["phone"], $student["address"], 
+                                           $student["department"], $student["year_of_study"], $id]) . " parameters");
+                            $stmt->bind_param("sssssssssii", 
                                            $student['username'], $student['email'], $student['student_id'], 
                                            $student['first_name'], $student['last_name'], $student['gender'], 
-                                           $student['dob'], $student['phone'], $student['address'], 
+                                           $student['phone'], $student['address'], 
                                            $student['department'], $student['year_of_study'], $id);
                             $stmt->execute();
                             
@@ -276,9 +310,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 </p>
             </div>
         </div>
-        
-        <form method="POST" action="">
-            <input type="hidden" name="status_update" value="1">
+          <form id="student-status-form" method="POST" action="/LTW/api/update_student_status.php">
+            <input type="hidden" name="student_id" value="<?php echo $id; ?>">
             
             <div class="mb-3">
                 <label for="status" class="form-label">Trạng thái mới</label>
@@ -296,11 +329,60 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 <textarea class="form-control" id="status_reason" name="status_reason" rows="3" required></textarea>
             </div>
             
+            <div id="status-response-container"></div>
+            
             <div class="d-grid gap-2 d-md-flex justify-content-md-end">
                 <a href="/LTW/views/admin/students/view.php?id=<?php echo $id; ?>" class="btn btn-secondary me-md-2">Hủy bỏ</a>
                 <button type="submit" class="btn btn-primary">Cập nhật trạng thái</button>
             </div>
         </form>
+        
+        <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const statusForm = document.getElementById('student-status-form');
+            const responseContainer = document.getElementById('status-response-container');
+            
+            if (statusForm) {
+                statusForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    
+                    // Show loading indicator
+                    responseContainer.innerHTML = '<div class="alert alert-info">Đang xử lý...</div>';
+                    
+                    // Submit form via AJAX
+                    submitFormAjax(
+                        this,
+                        function(response) {
+                            // Success callback
+                            if (response.success) {
+                                // Update the status badge with new status
+                                const statusBadges = document.querySelectorAll('.badge');
+                                if (statusBadges.length) {
+                                    statusBadges.forEach(badge => {
+                                        badge.className = response.status_class + ' badge';
+                                        badge.textContent = response.status_text;
+                                    });
+                                }
+                                
+                                // Show success message
+                                showNotification('success', response.message, 'status-response-container');
+                                
+                                // Reset reason field
+                                document.getElementById('status_reason').value = '';
+                            } else {
+                                // Show error message
+                                showNotification('danger', response.message, 'status-response-container');
+                            }
+                        },
+                        function(error, status) {
+                            // Error callback
+                            showNotification('danger', 'Đã xảy ra lỗi khi cập nhật trạng thái. Vui lòng thử lại.', 'status-response-container');
+                        }
+                    );
+                });
+            }
+        });
+        </script>
     </div>
 </div>
 
@@ -350,12 +432,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                 <option value="other" <?php echo $student['gender'] == 'other' ? 'selected' : ''; ?>>Khác</option>
                             </select>
                             <div class="invalid-feedback">Vui lòng chọn giới tính</div>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label for="dob" class="form-label">Ngày sinh *</label>
-                            <input type="date" class="form-control" id="dob" name="dob" 
-                                   value="<?php echo $student['dob']; ?>" required>
-                            <div class="invalid-feedback">Ngày sinh là bắt buộc</div>
                         </div>
                     </div>
                     

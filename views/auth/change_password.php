@@ -88,8 +88,8 @@ require_once 'C:\xampp\htdocs\LTW\includes\header.php';
                         echo displayError($errorMsg);
                         echo displaySuccess($successMsg);
                     ?>
-                    
-                    <form method="post" action="">
+                      <div id="ajax-response-container"></div>
+                      <form id="change-password-form" method="post" action="/LTW/api/change_password.php">
                         <div class="form-group">
                             <label for="current_password">Mật khẩu Hiện tại <span class="text-danger">*</span></label>
                             <input type="password" class="form-control" id="current_password" name="current_password" required>
@@ -111,6 +111,43 @@ require_once 'C:\xampp\htdocs\LTW\includes\header.php';
                             <a href="/LTW/views/profile.php" class="btn btn-secondary">Hủy</a>
                         </div>
                     </form>
+                    
+                    <script>
+                    document.addEventListener('DOMContentLoaded', function() {
+                        const changePasswordForm = document.getElementById('change-password-form');
+                        const responseContainer = document.getElementById('ajax-response-container');
+                        
+                        if (changePasswordForm) {
+                            changePasswordForm.addEventListener('submit', function(e) {
+                                e.preventDefault();
+                                
+                                // Show loading indicator
+                                responseContainer.innerHTML = '<div class="alert alert-info">Đang xử lý...</div>';
+                                
+                                // Submit form via AJAX
+                                submitFormAjax(
+                                    this,
+                                    function(response) {
+                                        // Success callback
+                                        if (response.success) {
+                                            // Show success message
+                                            showNotification('success', response.message, 'ajax-response-container');
+                                            // Reset form
+                                            changePasswordForm.reset();
+                                        } else {
+                                            // Show error message
+                                            showNotification('danger', response.message, 'ajax-response-container');
+                                        }
+                                    },
+                                    function(error, status) {
+                                        // Error callback
+                                        showNotification('danger', 'Đã xảy ra lỗi khi thay đổi mật khẩu. Vui lòng thử lại.', 'ajax-response-container');
+                                    }
+                                );
+                            });
+                        }
+                    });
+                    </script>
                 </div>
             </div>
             

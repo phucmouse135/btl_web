@@ -242,3 +242,21 @@ logActivity("Cập nhật hồ sơ", "Người dùng đã cập nhật thông ti
 3. Nhận xử lý yêu cầu và cập nhật trạng thái thành "đang xử lý"
 4. Sau khi hoàn thành, cập nhật trạng thái thành "đã hoàn thành"
 5. Ghi chú cách xử lý và kết quả
+
+## AJAX Implementations
+
+### 1. Change Password Form
+
+The original change password form used a traditional form submission approach, causing a full page reload. We've now converted it to use AJAX for a smoother user experience.
+
+#### Key Benefits:
+- No page refresh required
+- Immediate feedback to the user
+- Better error handling with specific feedback
+- Same server-side security validation is maintained
+
+#### Implementation Details:
+- Uses the existing API endpoint at `/LTW/api/change_password.php`
+- Added form validation in JavaScript before submission
+- Added loading indicator during submission
+- Displays success/error messages without page reload

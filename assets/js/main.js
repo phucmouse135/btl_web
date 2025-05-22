@@ -9,8 +9,7 @@ document.addEventListener('DOMContentLoaded', function() {
     tooltipTriggerList.map(function (tooltipTriggerEl) {
         return new bootstrap.Tooltip(tooltipTriggerEl)
     });
-    
-    // Confirm Delete Action
+      // Confirm Delete Action
     const deleteButtons = document.querySelectorAll('.btn-delete');
     if (deleteButtons) {
         deleteButtons.forEach(button => {
@@ -18,6 +17,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 e.preventDefault();
                 const deleteUrl = this.getAttribute('href');
                 const itemName = this.getAttribute('data-item-name') || 'this item';
+                const isAjax = this.getAttribute('data-ajax-delete') === 'true';
                 
                 Swal.fire({
                     title: 'Are you sure?',
@@ -29,7 +29,52 @@ document.addEventListener('DOMContentLoaded', function() {
                     confirmButtonText: 'Yes, delete it!'
                 }).then((result) => {
                     if (result.isConfirmed) {
-                        window.location.href = deleteUrl;
+                        if (isAjax) {
+                            // Use AJAX for deletion
+                            const responseContainer = document.getElementById('ajax-response-container') || document.createElement('div');
+                            if (!document.getElementById('ajax-response-container')) {
+                                responseContainer.id = 'ajax-response-container';
+                                document.querySelector('.container-fluid').prepend(responseContainer);
+                            }
+                            
+                            sendAjaxRequest(
+                                deleteUrl,
+                                'POST',
+                                { ajax_delete: '1' },
+                                function(response) {
+                                    if (response.success) {
+                                        // Show success message
+                                        showNotification('success', response.message, 'ajax-response-container');
+                                        
+                                        // Remove deleted item from DOM if target specified
+                                        const targetId = button.getAttribute('data-target-id');
+                                        if (targetId) {
+                                            const targetElement = document.getElementById(targetId);
+                                            if (targetElement) {
+                                                targetElement.remove();
+                                            }
+                                        }
+                                        
+                                        // If there's a redirect URL, redirect after 2 seconds
+                                        if (response.redirect) {
+                                            setTimeout(function() {
+                                                window.location.href = response.redirect;
+                                            }, 2000);
+                                        }
+                                    } else {
+                                        // Show error message
+                                        showNotification('danger', response.message || 'Failed to delete item', 'ajax-response-container');
+                                    }
+                                },
+                                function(error, status) {
+                                    // Error callback
+                                    showNotification('danger', 'An error occurred while processing your request', 'ajax-response-container');
+                                }
+                            );
+                        } else {
+                            // Use traditional redirect for deletion
+                            window.location.href = deleteUrl;
+                        }
                     }
                 });
             });

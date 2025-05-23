@@ -153,13 +153,20 @@ $result = $stmt->get_result();
                     <tbody>
                         <?php while ($student = $result->fetch_assoc()): ?>
                             <tr>
-                                <td><?php echo isset($student['student_id']) ? $student['student_id'] : 'N/A'; ?></td>
-                                <td>
+                                <td><?php echo isset($student['student_id']) ? $student['student_id'] : 'N/A'; ?></td>                                <td>
                                     <div class="d-flex align-items-center">
-                                        <img src="<?php echo !empty($student['profile_pic']) && file_exists($_SERVER['DOCUMENT_ROOT'] . '/LTW/uploads/profile_pics/' . $student['profile_pic']) 
-                                            ? '/LTW/uploads/profile_pics/' . $student['profile_pic'] 
-                                            : '/LTW/assets/images/user.png'; ?>" 
-                                             class="rounded-circle me-2" width="32" height="32">
+                                        <?php 
+                                        // Kiểm tra ảnh hồ sơ và sử dụng ảnh mặc định nếu không có
+                                        $profileImage = '/LTW/assets/images/ktx.jpg'; // Ảnh mặc định
+                                        
+                                        if (!empty($student['profile_pic']) && file_exists($_SERVER['DOCUMENT_ROOT'] . '/LTW/uploads/profile_pics/' . $student['profile_pic'])) {
+                                            $profileImage = '/LTW/uploads/profile_pics/' . $student['profile_pic'];
+                                        } elseif (file_exists($_SERVER['DOCUMENT_ROOT'] . '/LTW/assets/images/user.png')) {
+                                            $profileImage = '/LTW/assets/images/user.png';
+                                        }
+                                        ?>
+                                        <img src="<?php echo $profileImage; ?>" 
+                                             class="rounded-circle me-2" width="32" height="32" alt="Profile">
                                         <?php echo (isset($student['first_name']) ? $student['first_name'] : '') . ' ' . (isset($student['last_name']) ? $student['last_name'] : ''); ?>
                                     </div>
                                 </td>

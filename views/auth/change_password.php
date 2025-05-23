@@ -1,7 +1,12 @@
 <?php
 // Include cơ sở dữ liệu và các hàm
-require_once 'C:\xampp\htdocs\LTW\config\database.php';
-require_once 'C:\xampp\htdocs\LTW\config\functions.php';
+require_once $_SERVER['DOCUMENT_ROOT'] . '/LTW/config/database.php';
+require_once $_SERVER['DOCUMENT_ROOT'] . '/LTW/config/functions.php';
+
+// Ensure the session is started
+if (session_status() == PHP_SESSION_NONE) {
+    session_start();
+}
 
 // Yêu cầu đăng nhập để truy cập trang này
 requireLogin();
@@ -14,8 +19,17 @@ $successMsg = '';
 $userId = $_SESSION['user_id'];
 $userRole = $_SESSION['user_role'];
 
+// Check if this is an AJAX request
+$isAjax = isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
+
+// Initialize response for AJAX
+$response = [
+    'success' => false,
+    'message' => ''
+];
+
 // Xử lý thay đổi mật khẩu nếu biểu mẫu được gửi
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['change_password'])) {
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_POST['change_password']) || $isAjax)) {
     // Lấy dữ liệu biểu mẫu
     $currentPassword = $_POST['current_password'] ?? '';
     $newPassword = $_POST['new_password'] ?? '';
@@ -24,10 +38,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['change_password'])) {
     // Xác thực đầu vào
     if (empty($currentPassword) || empty($newPassword) || empty($confirmPassword)) {
         $errorMsg = "Tất cả các trường đều bắt buộc.";
+        $response['message'] = $errorMsg;
     } else if ($newPassword != $confirmPassword) {
         $errorMsg = "Mật khẩu mới và xác nhận không khớp.";
+        $response['message'] = $errorMsg;
     } else if (strlen($newPassword) < 8) {
         $errorMsg = "Mật khẩu mới phải có ít nhất 8 ký tự.";
+        $response['message'] = $errorMsg;
     } else {
         // Xác định bảng và trường mật khẩu
         $passwordField = "password";
@@ -50,26 +67,37 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['change_password'])) {
                 $sql = "UPDATE $table SET $passwordField = ? WHERE id = ?";
                 $stmt = $conn->prepare($sql);
                 $stmt->bind_param("si", $hashedPassword, $userId);
-                
-                if ($stmt->execute()) {
+                  if ($stmt->execute()) {
                     $successMsg = "Thay đổi mật khẩu thành công.";
+                    $response['success'] = true;
+                    $response['message'] = $successMsg;
+                    
                     // Ghi lại hoạt động
                     logActivity("Mật khẩu Đã thay đổi", "Người dùng đã thay đổi mật khẩu của họ", $userId, $userRole);
                 } else {
                     $errorMsg = "Lỗi khi cập nhật mật khẩu: " . $conn->error;
-                }
-            } else {
+                    $response['message'] = $errorMsg;
+                }            } else {
                 $errorMsg = "Mật khẩu hiện tại không chính xác.";
+                $response['message'] = $errorMsg;
             }
         } else {
             $errorMsg = "Không tìm thấy người dùng.";
+            $response['message'] = $errorMsg;
         }
         $stmt->close();
     }
 }
 
-// Include header
-require_once 'C:\xampp\htdocs\LTW\includes\header.php';
+// If this is an AJAX request, return JSON response and exit
+if ($isAjax && $_SERVER['REQUEST_METHOD'] == 'POST') {
+    header('Content-Type: application/json');
+    echo json_encode($response);
+    exit;
+}
+
+// Include header for normal page view
+require_once $_SERVER['DOCUMENT_ROOT'] . '/LTW/includes/header.php';
 ?>
 
 <div class="container-fluid">
@@ -83,13 +111,11 @@ require_once 'C:\xampp\htdocs\LTW\includes\header.php';
                 <div class="card-header py-3">
                     <h6 class="m-0 font-weight-bold text-primary">Cập nhật Mật khẩu của Bạn</h6>
                 </div>
-                <div class="card-body">
-                    <?php
+                <div class="card-body">                    <?php
                         echo displayError($errorMsg);
                         echo displaySuccess($successMsg);
-                    ?>
-                      <div id="ajax-response-container"></div>
-                      <form id="change-password-form" method="post" action="/LTW/api/change_password.php">
+                    ?>                      <div id="ajax-response-container"></div>
+                      <form id="change-password-form" method="post" action="" autocomplete="off">
                         <div class="form-group">
                             <label for="current_password">Mật khẩu Hiện tại <span class="text-danger">*</span></label>
                             <input type="password" class="form-control" id="current_password" name="current_password" required>
@@ -110,40 +136,71 @@ require_once 'C:\xampp\htdocs\LTW\includes\header.php';
                             <button type="submit" name="change_password" class="btn btn-primary">Thay đổi Mật khẩu</button>
                             <a href="/LTW/views/profile.php" class="btn btn-secondary">Hủy</a>
                         </div>
-                    </form>
-                    
-                    <script>
+                    </form>                      <script>
                     document.addEventListener('DOMContentLoaded', function() {
-                        const changePasswordForm = document.getElementById('change-password-form');
+                        const form = document.getElementById('change-password-form');
                         const responseContainer = document.getElementById('ajax-response-container');
                         
-                        if (changePasswordForm) {
-                            changePasswordForm.addEventListener('submit', function(e) {
+                        if (form) {
+                            form.addEventListener('submit', function(e) {
                                 e.preventDefault();
                                 
-                                // Show loading indicator
-                                responseContainer.innerHTML = '<div class="alert alert-info">Đang xử lý...</div>';
+                                // Display loading message
+                                responseContainer.innerHTML = '<div class="alert alert-info"><i class="fas fa-spinner fa-spin me-2"></i> Đang xử lý...</div>';
                                 
-                                // Submit form via AJAX
-                                submitFormAjax(
-                                    this,
-                                    function(response) {
-                                        // Success callback
-                                        if (response.success) {
-                                            // Show success message
-                                            showNotification('success', response.message, 'ajax-response-container');
-                                            // Reset form
-                                            changePasswordForm.reset();
-                                        } else {
-                                            // Show error message
-                                            showNotification('danger', response.message, 'ajax-response-container');
-                                        }
-                                    },
-                                    function(error, status) {
-                                        // Error callback
-                                        showNotification('danger', 'Đã xảy ra lỗi khi thay đổi mật khẩu. Vui lòng thử lại.', 'ajax-response-container');
+                                // Get form data
+                                const currentPassword = document.getElementById('current_password').value;
+                                const newPassword = document.getElementById('new_password').value;
+                                const confirmPassword = document.getElementById('confirm_password').value;
+                                
+                                // Basic validation
+                                if (!currentPassword || !newPassword || !confirmPassword) {
+                                    responseContainer.innerHTML = '<div class="alert alert-danger"><i class="fas fa-exclamation-triangle me-2"></i> Tất cả các trường đều bắt buộc.</div>';
+                                    return;
+                                }
+                                
+                                if (newPassword !== confirmPassword) {
+                                    responseContainer.innerHTML = '<div class="alert alert-danger"><i class="fas fa-exclamation-triangle me-2"></i> Mật khẩu mới và xác nhận không khớp.</div>';
+                                    return;
+                                }
+                                
+                                if (newPassword.length < 8) {
+                                    responseContainer.innerHTML = '<div class="alert alert-danger"><i class="fas fa-exclamation-triangle me-2"></i> Mật khẩu mới phải có ít nhất 8 ký tự.</div>';
+                                    return;
+                                }
+                                
+                                // Create form data
+                                const formData = new FormData();
+                                formData.append('current_password', currentPassword);
+                                formData.append('new_password', newPassword);
+                                formData.append('confirm_password', confirmPassword);
+                                formData.append('change_password', '1');
+                                  // Send AJAX request
+                                fetch(window.location.href, {
+                                    method: 'POST',
+                                    body: formData,
+                                    headers: {
+                                        'X-Requested-With': 'XMLHttpRequest'
                                     }
-                                );
+                                })
+                                .then(response => {
+                                    if (!response.ok) {
+                                        throw new Error('Network response was not ok');
+                                    }
+                                    return response.json();
+                                })
+                                .then(data => {
+                                    if (data.success) {
+                                        responseContainer.innerHTML = '<div class="alert alert-success"><i class="fas fa-check-circle me-2"></i> ' + data.message + '</div>';
+                                        form.reset();
+                                    } else {
+                                        responseContainer.innerHTML = '<div class="alert alert-danger"><i class="fas fa-exclamation-triangle me-2"></i> ' + data.message + '</div>';
+                                    }
+                                })
+                                .catch(error => {
+                                    console.error('Error:', error);
+                                    responseContainer.innerHTML = '<div class="alert alert-danger"><i class="fas fa-exclamation-triangle me-2"></i> Đã xảy ra lỗi khi thay đổi mật khẩu. Vui lòng thử lại.</div>';
+                                });
                             });
                         }
                     });
@@ -171,5 +228,5 @@ require_once 'C:\xampp\htdocs\LTW\includes\header.php';
 
 <?php
 // Include footer
-require_once 'C:\xampp\htdocs\LTW\includes\footer.php';
+require_once $_SERVER['DOCUMENT_ROOT'] . '/LTW/includes/footer.php';
 ?>

@@ -1,8 +1,8 @@
 <?php
 // Include necessary files
-require_once 'C:\xampp\htdocs\LTW\config\database.php';
-require_once 'C:\xampp\htdocs\LTW\config\functions.php';
-require_once 'C:\xampp\htdocs\LTW\includes\header.php';
+require_once $_SERVER['DOCUMENT_ROOT'] . '/LTW/config/database.php';
+require_once $_SERVER['DOCUMENT_ROOT'] . '/LTW/config/functions.php';
+require_once $_SERVER['DOCUMENT_ROOT'] . '/LTW/includes/header.php';
 
 // Check if user is logged in
 if (!isset($_SESSION['user_id'])) {
@@ -29,19 +29,66 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_profile'])) {
     $fullname = $_POST['fullname'] ?? '';
     $phone = $_POST['phone'] ?? '';
     
-    // Update user information
-    $updateQuery = "UPDATE users SET fullname = ?, phone = ? WHERE id = ?";
-    $updateStmt = $conn->prepare($updateQuery);
-    $updateStmt->bind_param("ssi", $fullname, $phone, $userId);
+    // Process profile picture upload if provided
+    $profilePicUpdate = '';
+    $profilePicParams = [];
     
-    if ($updateStmt->execute()) {
-        $successMsg = "Thông tin hồ sơ đã được cập nhật thành công!";
-        // Refresh user data
-        $stmt->execute();
-        $result = $stmt->get_result();
-        $user = $result->fetch_assoc();
-    } else {
-        $errorMsg = "Có lỗi xảy ra khi cập nhật hồ sơ: " . $conn->error;
+    if (!empty($_FILES['profile_pic']['name'])) {
+        // Define allowed file types and maximum file size
+        $allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+        $maxSize = 2 * 1024 * 1024; // 2MB
+        
+        if ($_FILES['profile_pic']['size'] > $maxSize) {
+            $errorMsg = "Kích thước ảnh quá lớn. Tối đa 2MB.";
+        } elseif (!in_array($_FILES['profile_pic']['type'], $allowedTypes)) {
+            $errorMsg = "Chỉ chấp nhận file ảnh định dạng JPEG, PNG, GIF.";
+        } else {
+            // Create unique filename
+            $fileExt = pathinfo($_FILES['profile_pic']['name'], PATHINFO_EXTENSION);
+            $newFilename = uniqid(rand(), true) . '_' . time() . '.' . $fileExt;
+            $uploadPath = $_SERVER['DOCUMENT_ROOT'] . '/LTW/uploads/profile_pics/' . $newFilename;
+            
+            if (move_uploaded_file($_FILES['profile_pic']['tmp_name'], $uploadPath)) {
+                // Add to update query
+                $profilePicUpdate = ", profile_pic = ?";
+                $profilePicParams[] = $newFilename;
+                
+                // Remove old profile pic if it exists and is not default
+                if (!empty($user['profile_pic']) && $user['profile_pic'] != 'default.jpg') {
+                    $oldPicPath = $_SERVER['DOCUMENT_ROOT'] . '/LTW/uploads/profile_pics/' . $user['profile_pic'];
+                    if (file_exists($oldPicPath)) {
+                        @unlink($oldPicPath);
+                    }
+                }
+            } else {
+                $errorMsg = "Lỗi khi tải lên ảnh đại diện.";
+            }
+        }
+    }
+    
+    if (empty($errorMsg)) {
+        // Update user information
+        $updateQuery = "UPDATE users SET fullname = ?, phone = ?" . $profilePicUpdate . " WHERE id = ?";
+        $updateStmt = $conn->prepare($updateQuery);
+        
+        $paramTypes = "ss" . str_repeat("s", count($profilePicParams)) . "i";
+        $bindParams = [$fullname, $phone];
+        foreach ($profilePicParams as $param) {
+            $bindParams[] = $param;
+        }
+        $bindParams[] = $userId;
+        
+        $updateStmt->bind_param($paramTypes, ...$bindParams);
+        
+        if ($updateStmt->execute()) {
+            $successMsg = "Thông tin hồ sơ đã được cập nhật thành công!";
+            // Refresh user data
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $user = $result->fetch_assoc();
+        } else {
+            $errorMsg = "Có lỗi xảy ra khi cập nhật hồ sơ: " . $conn->error;
+        }
     }
 }
 ?>
@@ -77,9 +124,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_profile'])) {
             <div class="card shadow mb-4">
                 <div class="card-header py-3 d-flex justify-content-between align-items-center">
                     <h6 class="m-0 font-weight-bold text-primary">Thông tin Hồ sơ</h6>
-                </div>
-                <div class="card-body">
-                    <form method="post" action="">
+                </div>                <div class="card-body">
+                    <form method="post" action="" enctype="multipart/form-data">
                         <div class="row">
                             <div class="col-md-6">
                                 <div class="form-group">
@@ -110,6 +156,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_profile'])) {
                                     <label for="role"><strong>Vai trò</strong></label>
                                     <input type="text" class="form-control" id="role" 
                                            value="<?php echo htmlspecialchars($userRole); ?>" readonly>
+                                </div>                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <div class="form-group">
+                                    <label for="profile_pic"><strong>Ảnh đại diện</strong></label>
+                                    <input type="file" class="form-control-file" id="profile_pic" name="profile_pic">
+                                    <small class="form-text text-muted">Chọn file ảnh (JPEG, PNG, GIF, tối đa 2MB)</small>
                                 </div>
                             </div>
                         </div>
@@ -144,10 +199,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_profile'])) {
             <div class="card shadow mb-4">
                 <div class="card-header py-3">
                     <h6 class="m-0 font-weight-bold text-primary">Thông tin Tài khoản</h6>
-                </div>
-                <div class="card-body">
+                </div>                <div class="card-body">
                     <div class="text-center mb-4">
-                        <img class="img-profile rounded-circle mb-3" src="C:\xampp\htdocs\LTW\assets\images\ktx.jpg" width="360" height="360" alt="User Profile Picture">
+                        <?php 
+                        // Check if user has a custom profile picture
+                        $profilePic = '/LTW/assets/images/ktx.jpg'; // Default image
+                        if (!empty($user['profile_pic']) && file_exists($_SERVER['DOCUMENT_ROOT'] . '/LTW/uploads/profile_pics/' . $user['profile_pic'])) {
+                            $profilePic = '/LTW/uploads/profile_pics/' . $user['profile_pic'];
+                        }
+                        ?>
+                        <img class="img-profile rounded-circle mb-3" src="<?php echo $profilePic; ?>" width="150" height="150" alt="User Profile Picture">
                         <h5><?php echo htmlspecialchars($user['fullname'] ?? 'Người dùng'); ?></h5>
                         <p class="badge badge-primary"><?php echo htmlspecialchars($userRole); ?></p>
                     </div>
@@ -204,4 +265,4 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_profile'])) {
     </div>
 </div>
 
-<?php require_once '../includes/footer.php'; ?>
+<?php require_once $_SERVER['DOCUMENT_ROOT'] . '/LTW/includes/footer.php'; ?>

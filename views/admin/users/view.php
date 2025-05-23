@@ -139,12 +139,19 @@ include '../../../includes/header.php';
                 <div class="card-header">
                     <i class="fas fa-user me-1"></i>
                     Thông tin tài khoản
-                </div>
-                <div class="card-body">
+                </div>                <div class="card-body">
                     <div class="text-center mb-4">
-                        <div class="avatar-circle mb-3">
-                            <span class="avatar-text"><?php echo strtoupper(substr($user['username'], 0, 1)); ?></span>
-                        </div>
+                        <?php 
+                        // Kiểm tra ảnh hồ sơ và sử dụng ảnh mặc định nếu không có
+                        $profileImage = '/LTW/assets/images/ktx.jpg'; // Ảnh mặc định
+                        
+                        if (!empty($user['profile_pic']) && file_exists($_SERVER['DOCUMENT_ROOT'] . '/LTW/uploads/profile_pics/' . $user['profile_pic'])) {
+                            $profileImage = '/LTW/uploads/profile_pics/' . $user['profile_pic'];
+                        } elseif (file_exists($_SERVER['DOCUMENT_ROOT'] . '/LTW/assets/images/user.png')) {
+                            $profileImage = '/LTW/assets/images/user.png';
+                        }
+                        ?>
+                        <img src="<?php echo $profileImage; ?>" class="rounded-circle mb-3" width="100" height="100" alt="Profile Image">
                         <h4><?php echo htmlspecialchars($user['username']); ?></h4>
                         <p>
                             <span class="badge bg-<?php echo $user['status'] == 'active' ? 'success' : 'danger'; ?>">

@@ -156,16 +156,7 @@ include '../../../includes/header.php';
                                             <i class="fas fa-edit"></i>
                                         </a>
                                         <?php if ($user['id'] != $_SESSION['user_id']): ?>
-                                            <?php if ($user['status'] == 'active'): ?>
-                                                <a href="status.php?id=<?php echo $user['id']; ?>&action=deactivate" class="btn btn-sm btn-warning" onclick="return confirm('Bạn có chắc chắn muốn vô hiệu hóa người dùng này?')">
-                                                    <i class="fas fa-ban"></i>
-                                                </a>
-                                            <?php else: ?>
-                                                <a href="status.php?id=<?php echo $user['id']; ?>&action=activate" class="btn btn-sm btn-success" onclick="return confirm('Bạn có chắc chắn muốn kích hoạt người dùng này?')">
-                                                    <i class="fas fa-check"></i>
-                                                </a>
-                                            <?php endif; ?>
-                                            <a href="delete.php?id=<?php echo $user['id']; ?>" class="btn btn-sm btn-danger" onclick="return confirm('Bạn có chắc chắn muốn xóa người dùng này? Hành động này không thể hoàn tác.')">
+                                            <a href="/LTW/api/delete_item.php?type=user&id=<?php echo $user['id']; ?>" class="btn btn-sm btn-danger btn-delete" data-ajax-delete="true" data-item-name="<?php echo htmlspecialchars($user['username']); ?>">
                                                 <i class="fas fa-trash"></i>
                                             </a>
                                         <?php endif; ?>

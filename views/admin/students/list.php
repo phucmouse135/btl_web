@@ -10,40 +10,6 @@ if (!hasRole('admin') && !hasRole('staff')) {
     exit();
 }
 
-// Xử lý xóa sinh viên
-if (isset($_GET['action']) && $_GET['action'] == 'delete' && isset($_GET['id'])) {
-    $id = intval($_GET['id']);
-    
-    // Kiểm tra xem sinh viên có tồn tại không
-    $checkSql = "SELECT id, first_name, last_name FROM users WHERE id = ? AND role = 'student'";
-    $checkStmt = $conn->prepare($checkSql);
-    $checkStmt->bind_param("i", $id);
-    $checkStmt->execute();
-    $checkResult = $checkStmt->get_result();
-    
-    if ($checkResult->num_rows > 0) {
-        $student = $checkResult->fetch_assoc();
-        
-        try {
-            // Xóa tài khoản người dùng (bao gồm cả thông tin sinh viên)
-            $deleteUserSql = "DELETE FROM users WHERE id = ?";
-            $deleteUserStmt = $conn->prepare($deleteUserSql);
-            $deleteUserStmt->bind_param("i", $id);
-            $deleteUserStmt->execute();
-            
-            // Thông báo thành công
-            $success = "Sinh viên " . $student['first_name'] . " " . $student['last_name'] . " đã được xóa thành công";
-            
-            // Ghi nhật ký hoạt động
-            logActivity('delete_student', 'Đã xóa sinh viên: ' . $student['first_name'] . ' ' . $student['last_name']);
-        } catch (Exception $e) {
-            $error = "Lỗi khi xóa sinh viên: " . $e->getMessage();
-        }
-    } else {
-        $error = "Không tìm thấy sinh viên";
-    }
-}
-
 // Lấy tham số tìm kiếm
 $search = isset($_GET['search']) ? sanitizeInput($_GET['search']) : '';
 $status = isset($_GET['status']) ? sanitizeInput($_GET['status']) : 'all';
@@ -187,13 +153,20 @@ $result = $stmt->get_result();
                     <tbody>
                         <?php while ($student = $result->fetch_assoc()): ?>
                             <tr>
-                                <td><?php echo isset($student['student_id']) ? $student['student_id'] : 'N/A'; ?></td>
-                                <td>
+                                <td><?php echo isset($student['student_id']) ? $student['student_id'] : 'N/A'; ?></td>                                <td>
                                     <div class="d-flex align-items-center">
-                                        <img src="<?php echo !empty($student['profile_pic']) && file_exists($_SERVER['DOCUMENT_ROOT'] . '/LTW/uploads/profile_pics/' . $student['profile_pic']) 
-                                            ? '/LTW/uploads/profile_pics/' . $student['profile_pic'] 
-                                            : '/LTW/assets/images/user.png'; ?>" 
-                                             class="rounded-circle me-2" width="32" height="32">
+                                        <?php 
+                                        // Kiểm tra ảnh hồ sơ và sử dụng ảnh mặc định nếu không có
+                                        $profileImage = '/LTW/assets/images/ktx.jpg'; // Ảnh mặc định
+                                        
+                                        if (!empty($student['profile_pic']) && file_exists($_SERVER['DOCUMENT_ROOT'] . '/LTW/uploads/profile_pics/' . $student['profile_pic'])) {
+                                            $profileImage = '/LTW/uploads/profile_pics/' . $student['profile_pic'];
+                                        } elseif (file_exists($_SERVER['DOCUMENT_ROOT'] . '/LTW/assets/images/user.png')) {
+                                            $profileImage = '/LTW/assets/images/user.png';
+                                        }
+                                        ?>
+                                        <img src="<?php echo $profileImage; ?>" 
+                                             class="rounded-circle me-2" width="32" height="32" alt="Profile">
                                         <?php echo (isset($student['first_name']) ? $student['first_name'] : '') . ' ' . (isset($student['last_name']) ? $student['last_name'] : ''); ?>
                                     </div>
                                 </td>
@@ -233,14 +206,14 @@ $result = $stmt->get_result();
                                         <a href="/LTW/views/admin/students/view.php?id=<?php echo $student['id']; ?>" 
                                            class="btn btn-sm btn-info" title="Xem">
                                             <i class="fas fa-eye"></i>
-                                        </a>
-                                        <a href="/LTW/views/admin/students/edit.php?id=<?php echo $student['id']; ?>" 
+                                        </a>                                        <a href="/LTW/views/admin/students/edit.php?id=<?php echo $student['id']; ?>" 
                                            class="btn btn-sm btn-primary" title="Sửa">
                                             <i class="fas fa-edit"></i>
                                         </a>
-                                        <a href="/LTW/views/admin/students/list.php?action=delete&id=<?php echo $student['id']; ?>" 
+                                        <a href="/LTW/api/delete_item.php?type=student&id=<?php echo $student['id']; ?>" 
                                            class="btn btn-sm btn-danger btn-delete" 
                                            data-item-name="<?php echo (isset($student['first_name']) ? $student['first_name'] : '') . ' ' . (isset($student['last_name']) ? $student['last_name'] : ''); ?>"
+                                           data-ajax-delete="true"
                                            title="Xóa">
                                             <i class="fas fa-trash"></i>
                                         </a>

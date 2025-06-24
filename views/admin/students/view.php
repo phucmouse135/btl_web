@@ -109,12 +109,19 @@ logActivity('view_student', 'Đã xem hồ sơ sinh viên: ' . $student['first_n
             <div class="card-header py-3">
                 <h6 class="m-0 font-weight-bold text-primary">Hồ sơ sinh viên</h6>
             </div>
-            <div class="card-body">
-                <div class="text-center mb-4">
+            <div class="card-body">                <div class="text-center mb-4">
+                    <?php 
+                    // Kiểm tra ảnh hồ sơ và sử dụng ảnh mặc định nếu không có
+                    $profileImage = '/LTW/assets/images/ktx.jpg'; // Ảnh mặc định
+                    
+                    if (!empty($student['profile_pic']) && file_exists($_SERVER['DOCUMENT_ROOT'] . '/LTW/uploads/profile_pics/' . $student['profile_pic'])) {
+                        $profileImage = '/LTW/uploads/profile_pics/' . $student['profile_pic'];
+                    } elseif (file_exists($_SERVER['DOCUMENT_ROOT'] . '/LTW/assets/images/user.png')) {
+                        $profileImage = '/LTW/assets/images/user.png';
+                    }
+                    ?>
                     <img class="img-fluid rounded-circle mb-3" style="max-width: 150px;" 
-                         src="<?php echo !empty($student['profile_pic']) && file_exists($_SERVER['DOCUMENT_ROOT'] . '/LTW/uploads/profile_pics/' . $student['profile_pic']) 
-                            ? '/LTW/uploads/profile_pics/' . $student['profile_pic'] 
-                            : '/LTW/assets/images/user.png'; ?>" alt="Ảnh hồ sơ">
+                         src="<?php echo $profileImage; ?>" alt="Ảnh hồ sơ">
                     <h5 class="font-weight-bold"><?php echo $student['first_name'] . ' ' . $student['last_name']; ?></h5>
                     <p class="text-muted mb-2"><?php echo $student['student_id']; ?></p>
                     <span class="badge <?php echo ($student['status'] == 'active') ? 'bg-success' : (($student['status'] == 'inactive') ? 'bg-danger' : 'bg-info'); ?>">

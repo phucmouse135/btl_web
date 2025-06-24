@@ -51,30 +51,13 @@ $roleInfo = null;
 $activityLogs = [];
 
 if ($user['role'] == 'admin' || $user['role'] == 'staff') {
-    // Get staff information
-    $staffSql = "SELECT * FROM staff WHERE user_id = ?";
-    $staffStmt = $conn->prepare($staffSql);
-    $staffStmt->bind_param("i", $userId);
-    $staffStmt->execute();
-    $staffResult = $staffStmt->get_result();
-    
-    if ($staffResult->num_rows > 0) {
-        $roleInfo = $staffResult->fetch_assoc();
-    }
-    
-    // Get recent activity logs
-    $logSql = "SELECT * FROM activity_logs WHERE user_id = ? ORDER BY created_at DESC LIMIT 10";
-    $logStmt = $conn->prepare($logSql);
-    $logStmt->bind_param("i", $userId);
-    $logStmt->execute();
-    $logResult = $logStmt->get_result();
-    
-    while ($log = $logResult->fetch_assoc()) {
-        $activityLogs[] = $log;
-    }
+    // No separate staff table, use users table
+    $roleInfo = $user;
+    // No activity_logs table, show placeholder
+    $activityLogs = [];
 } elseif ($user['role'] == 'student') {
-    // Get student information from users table instead of students table
-    $studentSql = "SELECT u.*, u.name as full_name FROM users u WHERE u.id = ?";
+    // Get student information from users table
+    $studentSql = "SELECT u.*, CONCAT(u.first_name, ' ', u.last_name) as full_name FROM users u WHERE u.id = ?";
     $studentStmt = $conn->prepare($studentSql);
     $studentStmt->bind_param("i", $userId);
     $studentStmt->execute();
@@ -86,20 +69,19 @@ if ($user['role'] == 'admin' || $user['role'] == 'staff') {
     
     // Get current room assignment if any
     if ($roleInfo) {
-        $roomSql = "SELECT ra.*, r.room_number, b.name as building_name 
+        $roomSql = "SELECT ra.*, r.room_number, r.building_name 
                     FROM room_assignments ra
                     JOIN rooms r ON ra.room_id = r.id
-                    JOIN buildings b ON r.building_id = b.id
-                    WHERE ra.student_id = ? AND ra.status = 'current'
-                    LIMIT 1";
+                    WHERE ra.user_id = ? AND ra.status = 'active' LIMIT 1";
         $roomStmt = $conn->prepare($roomSql);
-        $roomStmt->bind_param("i", $roleInfo['id']);
+        $roomStmt->bind_param("i", $userId);
         $roomStmt->execute();
         $roomResult = $roomStmt->get_result();
         
         if ($roomResult->num_rows > 0) {
             $roleInfo['room_assignment'] = $roomResult->fetch_assoc();
         }
+        $roomStmt->close();
     }
 }
 
@@ -139,12 +121,19 @@ include '../../../includes/header.php';
                 <div class="card-header">
                     <i class="fas fa-user me-1"></i>
                     Thông tin tài khoản
-                </div>
-                <div class="card-body">
+                </div>                <div class="card-body">
                     <div class="text-center mb-4">
-                        <div class="avatar-circle mb-3">
-                            <span class="avatar-text"><?php echo strtoupper(substr($user['username'], 0, 1)); ?></span>
-                        </div>
+                        <?php 
+                        // Kiểm tra ảnh hồ sơ và sử dụng ảnh mặc định nếu không có
+                        $profileImage = '/LTW/assets/images/ktx.jpg'; // Ảnh mặc định
+                        
+                        if (!empty($user['profile_pic']) && file_exists($_SERVER['DOCUMENT_ROOT'] . '/LTW/uploads/profile_pics/' . $user['profile_pic'])) {
+                            $profileImage = '/LTW/uploads/profile_pics/' . $user['profile_pic'];
+                        } elseif (file_exists($_SERVER['DOCUMENT_ROOT'] . '/LTW/assets/images/user.png')) {
+                            $profileImage = '/LTW/assets/images/user.png';
+                        }
+                        ?>
+                        <img src="<?php echo $profileImage; ?>" class="rounded-circle mb-3" width="100" height="100" alt="Profile Image">
                         <h4><?php echo htmlspecialchars($user['username']); ?></h4>
                         <p>
                             <span class="badge bg-<?php echo $user['status'] == 'active' ? 'success' : 'danger'; ?>">
@@ -259,36 +248,15 @@ include '../../../includes/header.php';
                 </div>
                 
                 <!-- Recent Activities -->
-                <?php if (!empty($activityLogs)): ?>
-                    <div class="card mb-4">
-                        <div class="card-header">
-                            <i class="fas fa-history me-1"></i>
-                            Hoạt động gần đây
-                        </div>
-                        <div class="card-body">
-                            <div class="table-responsive">
-                                <table class="table table-striped">
-                                    <thead>
-                                        <tr>
-                                            <th>Hoạt động</th>
-                                            <th>Chi tiết</th>
-                                            <th>Thời gian</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <?php foreach ($activityLogs as $log): ?>
-                                            <tr>
-                                                <td><?php echo htmlspecialchars($log['activity_type']); ?></td>
-                                                <td><?php echo htmlspecialchars($log['description']); ?></td>
-                                                <td><?php echo formatDateTime($log['created_at']); ?></td>
-                                            </tr>
-                                        <?php endforeach; ?>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <i class="fas fa-history me-1"></i>
+                        Hoạt động gần đây
                     </div>
-                <?php endif; ?>
+                    <div class="card-body">
+                        <p>Không có thông tin hoạt động gần đây.</p>
+                    </div>
+                </div>
             <?php else: ?>
                 <div class="alert alert-warning">
                     <i class="fas fa-exclamation-triangle me-1"></i> Không tìm thấy thông tin chi tiết cho người dùng này.

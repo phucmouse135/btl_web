@@ -19,7 +19,7 @@ if (!$conn) {
 
 // Set UTF-8 character set
 if (!mysqli_set_charset($conn, "utf8mb4")) {
-    printf("Error loading character set utf8mb4: %s\n", mysqli_error($conn));
+    printf("Error loading character set utf8mb4: %s\n", mysqli_error($conn));   
     exit();
 }
 ?>

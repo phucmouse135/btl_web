@@ -13,19 +13,23 @@ if (!isset($_GET['id']) || !is_numeric($_GET['id'])) {
 
 $requestId = (int)$_GET['id'];
 $request = null;
-$comments = [];
-$history = [];
-$photos = [];
 $canEdit = false;
 $canAddComment = false;
 $message = '';
 $error = '';
 
-// Lấy chi tiết yêu cầu
-$query = "SELECT * FROM maintenance_requests WHERE id = ?";
-
-// Debug the current query
-echo "<!-- Debug: " . htmlspecialchars($query) . " -->";
+// Lấy chi tiết yêu cầu bảo trì từ cơ sở dữ liệu
+$query = "SELECT mr.*, 
+           r.room_number, r.floor, r.building_name,
+           CONCAT(u1.first_name, ' ', u1.last_name) as reporter_name,
+           u1.email as reporter_email,
+           CONCAT(u2.first_name, ' ', u2.last_name) as assignee_name,
+           u2.email as assignee_email 
+           FROM maintenance_requests mr
+           LEFT JOIN rooms r ON mr.room_id = r.id
+           LEFT JOIN users u1 ON mr.reported_by = u1.id
+           LEFT JOIN users u2 ON mr.assigned_to = u2.id
+           WHERE mr.id = ?";
 
 $stmt = $conn->prepare($query);
 if ($stmt === false) {
@@ -33,7 +37,10 @@ if ($stmt === false) {
 }
 $stmt->bind_param("i", $_GET['id']);
 
-$stmt->execute();
+if (!$stmt->execute()) {
+    die("Error executing query: " . $stmt->error);
+}
+
 $result = $stmt->get_result();
 
 if ($result->num_rows === 0) {
@@ -57,55 +64,10 @@ if (hasRole('student')) {
     $canAddComment = true;
 }
 
-// Lấy bình luận
-$commentQuery = "SELECT mc.*, 
-                CONCAT(u.first_name, ' ', u.last_name) as commenter_name,
-                u.role, u.email
-                FROM maintenance_comments mc
-                JOIN users u ON mc.user_id = u.id
-                WHERE mc.request_id = ?
-                ORDER BY mc.created_at ASC";
-
-$stmt = $conn->prepare($commentQuery);
-$stmt->bind_param("i", $requestId);
-$stmt->execute();
-$commentResult = $stmt->get_result();
-
-while ($row = $commentResult->fetch_assoc()) {
-    $comments[] = $row;
-}
-$stmt->close();
-
-// Lấy lịch sử
-$historyQuery = "SELECT mh.*, 
-                CONCAT(u.first_name, ' ', u.last_name) as user_name,
-                u.role
-                FROM maintenance_history mh
-                JOIN users u ON mh.user_id = u.id
-                WHERE mh.request_id = ?
-                ORDER BY mh.created_at ASC";
-
-$stmt = $conn->prepare($historyQuery);
-$stmt->bind_param("i", $requestId);
-$stmt->execute();
-$historyResult = $stmt->get_result();
-
-while ($row = $historyResult->fetch_assoc()) {
-    $history[] = $row;
-}
-$stmt->close();
-
-// Lấy ảnh
-$photoQuery = "SELECT * FROM maintenance_photos WHERE request_id = ? ORDER BY created_at ASC";
-$stmt = $conn->prepare($photoQuery);
-$stmt->bind_param("i", $requestId);
-$stmt->execute();
-$photoResult = $stmt->get_result();
-
-while ($row = $photoResult->fetch_assoc()) {
-    $photos[] = $row;
-}
-$stmt->close();
+// Khởi tạo biến để tránh lỗi undefined
+$comments = [];
+$history = [];
+$photos = [];
 
 // Xử lý gửi biểu mẫu
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -119,25 +81,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (empty($comment)) {
                 $error = "Bình luận không được để trống.";
             } else {
-                $stmt = $conn->prepare("INSERT INTO maintenance_comments (request_id, user_id, comment) VALUES (?, ?, ?)");
-                $stmt->bind_param("iis", $requestId, $_SESSION['user_id'], $comment);
-                
-                if ($stmt->execute()) {
-                    // Ghi vào lịch sử
-                    $historyStmt = $conn->prepare("INSERT INTO maintenance_history (request_id, user_id, action, details) VALUES (?, ?, 'comment_added', ?)");
-                    $details = "Bình luận: " . substr($comment, 0, 50) . (strlen($comment) > 50 ? "..." : "");
-                    $historyStmt->bind_param("iis", $requestId, $_SESSION['user_id'], $details);
-                    $historyStmt->execute();
-                    $historyStmt->close();
+                // Sử dụng trường resolution để lưu bình luận và lịch sử
+                if (hasRole('staff') || hasRole('admin')) {
+                    $currentResolution = $request['resolution'] ?? '';
+                    $newResolution = date('Y-m-d H:i') . ' - ' . $_SESSION['username'] . ': ' . $comment;
                     
-                    $message = "Đã thêm bình luận thành công.";
+                    if (!empty($currentResolution)) {
+                        $newResolution = $currentResolution . "\n\n" . $newResolution;
+                    }
                     
-                    // Làm mới trang để hiển thị bình luận mới
-                    redirect("/LTW/views/maintenance/view.php?id=$requestId");
-                } else {
-                    $error = "Không thể thêm bình luận.";
+                    $stmt = $conn->prepare("UPDATE maintenance_requests SET resolution = ? WHERE id = ?");
+                    if ($stmt === false) {
+                        $error = "Error preparing comment update: " . $conn->error;
+                    } else {
+                        $stmt->bind_param("si", $newResolution, $requestId);
+                        
+                        if ($stmt->execute()) {
+                            $message = "Đã thêm bình luận thành công.";
+                            
+                            // Làm mới trang để hiển thị bình luận mới
+                            redirect("/LTW/views/maintenance/view.php?id=$requestId");
+                        } else {
+                            $error = "Không thể thêm bình luận: " . $stmt->error;
+                        }
+                        $stmt->close();
+                    }
                 }
-                $stmt->close();
             }
         }
     }
@@ -160,13 +129,71 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 // Nếu đánh dấu là hoàn thành
                 if ($newStatus === 'completed') {
-                    $updateQuery .= ", completed_date = CURRENT_DATE(), completed_by = ?";
-                    $params[] = $_SESSION['user_id'];
-                    $types .= "i";
+                    $updateQuery .= ", completed_date = CURRENT_DATE()";
+                    
+                    // Thêm ghi chú hoàn thành vào trường resolution
+                    $currentResolution = $request['resolution'] ?? '';
+                    $completionNote = date('Y-m-d H:i') . ' - ' . $_SESSION['username'] . ': HOÀN THÀNH - ' . $notes;
+                    
+                    if (!empty($currentResolution)) {
+                        $newResolution = $currentResolution . "\n\n" . $completionNote;
+                    } else {
+                        $newResolution = $completionNote;
+                    }
+                    
+                    $updateQuery .= ", resolution = ?";
+                    $params[] = $newResolution;
+                    $types .= "s";
                 }
                 
-                if ($newStatus === 'reopened' || $newStatus === 'pending') {
-                    $updateQuery .= ", completed_date = NULL, completed_by = NULL";
+                if ($newStatus === 'pending') {
+                    $updateQuery .= ", completed_date = NULL";
+                    
+                    // Thêm ghi chú về việc đặt lại trạng thái
+                    $currentResolution = $request['resolution'] ?? '';
+                    $reopenNote = date('Y-m-d H:i') . ' - ' . $_SESSION['username'] . ': ĐÃ ĐẶT LẠI TRẠNG THÁI - ' . $notes;
+                    
+                    if (!empty($currentResolution)) {
+                        $newResolution = $currentResolution . "\n\n" . $reopenNote;
+                    } else {
+                        $newResolution = $reopenNote;
+                    }
+                    
+                    $updateQuery .= ", resolution = ?";
+                    $params[] = $newResolution;
+                    $types .= "s";
+                }
+                
+                if ($newStatus === 'in_progress' && ($oldStatus === 'pending' || $oldStatus === 'rejected')) {
+                    // Thêm ghi chú về việc bắt đầu xử lý
+                    $currentResolution = $request['resolution'] ?? '';
+                    $inProgressNote = date('Y-m-d H:i') . ' - ' . $_SESSION['username'] . ': BẮT ĐẦU XỬ LÝ - ' . $notes;
+                    
+                    if (!empty($currentResolution)) {
+                        $newResolution = $currentResolution . "\n\n" . $inProgressNote;
+                    } else {
+                        $newResolution = $inProgressNote;
+                    }
+                    
+                    $updateQuery .= ", resolution = ?";
+                    $params[] = $newResolution;
+                    $types .= "s";
+                }
+                
+                if ($newStatus === 'rejected') {
+                    // Thêm ghi chú về việc từ chối
+                    $currentResolution = $request['resolution'] ?? '';
+                    $rejectedNote = date('Y-m-d H:i') . ' - ' . $_SESSION['username'] . ': TỪ CHỐI - ' . $notes;
+                    
+                    if (!empty($currentResolution)) {
+                        $newResolution = $currentResolution . "\n\n" . $rejectedNote;
+                    } else {
+                        $newResolution = $rejectedNote;
+                    }
+                    
+                    $updateQuery .= ", resolution = ?";
+                    $params[] = $newResolution;
+                    $types .= "s";
                 }
                 
                 $updateQuery .= " WHERE id = ?";
@@ -174,28 +201,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $types .= "i";
                 
                 $stmt = $conn->prepare($updateQuery);
-                $stmt->bind_param($types, ...$params);
-                
-                if ($stmt->execute()) {
-                    // Thêm bản ghi lịch sử
-                    $historyStmt = $conn->prepare("
-                        INSERT INTO maintenance_history 
-                        (request_id, user_id, action, details, old_value, new_value) 
-                        VALUES (?, ?, 'status_change', ?, ?, ?)
-                    ");
-                    $details = !empty($notes) ? "Ghi chú: $notes" : "Trạng thái đã thay đổi";
-                    $historyStmt->bind_param("iisss", $requestId, $_SESSION['user_id'], $details, $oldStatus, $newStatus);
-                    $historyStmt->execute();
-                    $historyStmt->close();
-                    
-                    $message = "Trạng thái yêu cầu đã được cập nhật thành " . ucfirst(str_replace('_', ' ', $newStatus)) . ".";
-                    
-                    // Làm mới trang để hiển thị cập nhật
-                    redirect("/LTW/views/maintenance/view.php?id=$requestId");
+                if ($stmt === false) {
+                    $error = "Error preparing status update: " . $conn->error;
                 } else {
-                    $error = "Không thể cập nhật trạng thái yêu cầu.";
+                    $stmt->bind_param($types, ...$params);
+                    
+                    if ($stmt->execute()) {
+                        $message = "Trạng thái yêu cầu đã được cập nhật thành " . ucfirst(str_replace('_', ' ', $newStatus)) . ".";
+                        
+                        // Làm mới trang để hiển thị cập nhật
+                        redirect("/LTW/views/maintenance/view.php?id=$requestId");
+                    } else {
+                        $error = "Không thể cập nhật trạng thái yêu cầu: " . $stmt->error;
+                    }
+                    $stmt->close();
                 }
-                $stmt->close();
             }
         }
     }
@@ -212,91 +232,120 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($newPriority === $oldPriority) {
                 $error = "Mức độ ưu tiên đã được đặt thành $newPriority.";
             } else {
+                // Cập nhật mức độ ưu tiên
                 $stmt = $conn->prepare("UPDATE maintenance_requests SET priority = ? WHERE id = ?");
-                $stmt->bind_param("si", $newPriority, $requestId);
-                
-                if ($stmt->execute()) {
-                    // Thêm bản ghi lịch sử
-                    $historyStmt = $conn->prepare("
-                        INSERT INTO maintenance_history 
-                        (request_id, user_id, action, details, old_value, new_value) 
-                        VALUES (?, ?, 'priority_change', ?, ?, ?)
-                    ");
-                    $details = !empty($notes) ? "Ghi chú: $notes" : "Mức độ ưu tiên đã thay đổi";
-                    $historyStmt->bind_param("iisss", $requestId, $_SESSION['user_id'], $details, $oldPriority, $newPriority);
-                    $historyStmt->execute();
-                    $historyStmt->close();
-                    
-                    $message = "Mức độ ưu tiên của yêu cầu đã được cập nhật thành " . ucfirst($newPriority) . ".";
-                    
-                    // Làm mới trang để hiển thị cập nhật
-                    redirect("/LTW/views/maintenance/view.php?id=$requestId");
+                if ($stmt === false) {
+                    $error = "Error preparing priority update: " . $conn->error;
                 } else {
-                    $error = "Không thể cập nhật mức độ ưu tiên của yêu cầu.";
+                    $stmt->bind_param("si", $newPriority, $requestId);
+                    
+                    if ($stmt->execute()) {
+                        // Thêm ghi chú về việc thay đổi ưu tiên vào trường resolution
+                        $currentResolution = $request['resolution'] ?? '';
+                        $priorityNote = date('Y-m-d H:i') . ' - ' . $_SESSION['username'] . ': THAY ĐỔI MỨC ĐỘ ƯU TIÊN từ ' . 
+                                        ucfirst($oldPriority) . ' thành ' . ucfirst($newPriority);
+                        
+                        if (!empty($notes)) {
+                            $priorityNote .= ' - ' . $notes;
+                        }
+                        
+                        if (!empty($currentResolution)) {
+                            $newResolution = $currentResolution . "\n\n" . $priorityNote;
+                        } else {
+                            $newResolution = $priorityNote;
+                        }
+                        
+                        $resolutionStmt = $conn->prepare("UPDATE maintenance_requests SET resolution = ? WHERE id = ?");
+                        if ($resolutionStmt === false) {
+                            $error = "Error preparing resolution update: " . $conn->error;
+                        } else {
+                            $resolutionStmt->bind_param("si", $newResolution, $requestId);
+                            $resolutionStmt->execute();
+                            $resolutionStmt->close();
+                        }
+                        
+                        $message = "Mức độ ưu tiên của yêu cầu đã được cập nhật thành " . ucfirst($newPriority) . ".";
+                        
+                        // Làm mới trang để hiển thị cập nhật
+                        redirect("/LTW/views/maintenance/view.php?id=$requestId");
+                    } else {
+                        $error = "Không thể cập nhật mức độ ưu tiên của yêu cầu: " . $stmt->error;
+                    }
+                    $stmt->close();
                 }
-                $stmt->close();
             }
         }
     }
     
-    // Xử lý tải lên tệp
-    if (isset($_POST['action']) && $_POST['action'] === 'upload_photo') {
-        // Kiểm tra xem có tệp nào được tải lên không
-        if (!empty($_FILES['photo']['name'])) {
-            $uploadDir = $_SERVER['DOCUMENT_ROOT'] . '/LTW/uploads/maintenance/';
+    // Xử lý chỉ định nhân viên
+    if (isset($_POST['action']) && $_POST['action'] === 'assign_staff') {
+        if (!$canEdit) {
+            $error = "Bạn không có quyền chỉ định nhân viên cho yêu cầu này.";
+        } else {
+            $assignedTo = isset($_POST['staff_id']) ? (int)$_POST['staff_id'] : null;
+            $notes = sanitizeInput($_POST['notes'] ?? '');
             
-            // Tạo thư mục nếu nó không tồn tại
-            if (!file_exists($uploadDir)) {
-                mkdir($uploadDir, 0777, true);
+            // Lấy tên của nhân viên được chỉ định
+            $staffName = "Không được chỉ định";
+            if ($assignedTo) {
+                $staffQuery = "SELECT CONCAT(first_name, ' ', last_name) AS staff_name FROM users WHERE id = ?";
+                $staffStmt = $conn->prepare($staffQuery);
+                if ($staffStmt) {
+                    $staffStmt->bind_param("i", $assignedTo);
+                    $staffStmt->execute();
+                    $staffResult = $staffStmt->get_result();
+                    if ($staffRow = $staffResult->fetch_assoc()) {
+                        $staffName = $staffRow['staff_name'];
+                    }
+                    $staffStmt->close();
+                }
             }
             
-            $fileName = basename($_FILES['photo']['name']);
-            $fileExt = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
-            
-            // Tạo tên tệp duy nhất
-            $newFileName = 'request_' . $requestId . '_' . time() . '_' . rand(1000, 9999) . '.' . $fileExt;
-            $targetFile = $uploadDir . $newFileName;
-            
-            // Kiểm tra loại tệp
-            $allowedTypes = ['jpg', 'jpeg', 'png', 'gif'];
-            
-            if (!in_array($fileExt, $allowedTypes)) {
-                $error = "Chỉ cho phép các tệp JPG, JPEG, PNG và GIF.";
-            } elseif ($_FILES['photo']['size'] > 5000000) { // Giới hạn 5MB
-                $error = "Tệp quá lớn. Kích thước tối đa là 5MB.";
-            } elseif (move_uploaded_file($_FILES['photo']['tmp_name'], $targetFile)) {
-                // Tệp đã được tải lên thành công, thêm vào cơ sở dữ liệu
-                $caption = sanitizeInput($_POST['caption'] ?? '');
-                
-                $stmt = $conn->prepare("INSERT INTO maintenance_photos (request_id, file_path, caption, uploaded_by) VALUES (?, ?, ?, ?)");
-                $relativePath = '/LTW/uploads/maintenance/' . $newFileName;
-                $stmt->bind_param("issi", $requestId, $relativePath, $caption, $_SESSION['user_id']);
+            // Cập nhật nhân viên được chỉ định
+            $stmt = $conn->prepare("UPDATE maintenance_requests SET assigned_to = ? WHERE id = ?");
+            if ($stmt === false) {
+                $error = "Error preparing assignment update: " . $conn->error;
+            } else {
+                if ($assignedTo === null) {
+                    $stmt->bind_param("ii", NULL, $requestId);
+                } else {
+                    $stmt->bind_param("ii", $assignedTo, $requestId);
+                }
                 
                 if ($stmt->execute()) {
-                    // Thêm bản ghi lịch sử
-                    $historyStmt = $conn->prepare("
-                        INSERT INTO maintenance_history 
-                        (request_id, user_id, action, details) 
-                        VALUES (?, ?, 'photo_added', ?)
-                    ");
-                    $details = "Đã tải lên ảnh" . (!empty($caption) ? ": $caption" : "");
-                    $historyStmt->bind_param("iis", $requestId, $_SESSION['user_id'], $details);
-                    $historyStmt->execute();
-                    $historyStmt->close();
+                    // Thêm ghi chú về việc chỉ định nhân viên vào trường resolution
+                    $currentResolution = $request['resolution'] ?? '';
+                    $assignmentNote = date('Y-m-d H:i') . ' - ' . $_SESSION['username'] . ': CHỈ ĐỊNH NHÂN VIÊN - ' . 
+                                     $staffName;
                     
-                    $message = "Đã tải lên ảnh thành công.";
+                    if (!empty($notes)) {
+                        $assignmentNote .= ' - ' . $notes;
+                    }
                     
-                    // Làm mới trang để hiển thị ảnh mới
+                    if (!empty($currentResolution)) {
+                        $newResolution = $currentResolution . "\n\n" . $assignmentNote;
+                    } else {
+                        $newResolution = $assignmentNote;
+                    }
+                    
+                    $resolutionStmt = $conn->prepare("UPDATE maintenance_requests SET resolution = ? WHERE id = ?");
+                    if ($resolutionStmt === false) {
+                        $error = "Error preparing resolution update: " . $conn->error;
+                    } else {
+                        $resolutionStmt->bind_param("si", $newResolution, $requestId);
+                        $resolutionStmt->execute();
+                        $resolutionStmt->close();
+                    }
+                    
+                    $message = "Đã chỉ định nhân viên thành công.";
+                    
+                    // Làm mới trang để hiển thị cập nhật
                     redirect("/LTW/views/maintenance/view.php?id=$requestId");
                 } else {
-                    $error = "Không thể lưu thông tin ảnh vào cơ sở dữ liệu.";
+                    $error = "Không thể chỉ định nhân viên: " . $stmt->error;
                 }
                 $stmt->close();
-            } else {
-                $error = "Không thể tải lên ảnh.";
             }
-        } else {
-            $error = "Không có ảnh nào được chọn để tải lên.";
         }
     }
 }
@@ -335,17 +384,13 @@ switch ($request['status']) {
         $statusBadgeClass = 'bg-info';
         $statusText = 'Đang xử lý';
         break;
-    case 'scheduled':
-        $statusBadgeClass = 'bg-primary';
-        $statusText = 'Đã lên lịch';
-        break;
     case 'completed':
         $statusBadgeClass = 'bg-success';
         $statusText = 'Hoàn thành';
         break;
-    case 'canceled':
-        $statusBadgeClass = 'bg-secondary';
-        $statusText = 'Đã hủy';
+    case 'rejected':
+        $statusBadgeClass = 'bg-danger';
+        $statusText = 'Từ chối';
         break;
 }
 
@@ -428,7 +473,6 @@ switch ($request['priority']) {
                             <tr>
                                 <th>Người Báo cáo:</th>
                                 <td>
-                                    <?php echo $request['reported_by_name']; ?> 
                                     <?php if ($request['reporter_email']): ?>
                                         <br><small class="text-muted"><?php echo $request['reporter_email']; ?></small>
                                     <?php endif; ?>
@@ -544,42 +588,24 @@ switch ($request['priority']) {
             </div>
         </div>
 
-        <!-- Bình luận -->
-        <div class="card shadow mb-4">
+        <!-- Bình luận -->       <div class="card shadow mb-4">
             <div class="card-header py-3">
                 <h6 class="m-0 font-weight-bold text-primary">Bình luận & Cập nhật</h6>
             </div>
             <div class="card-body">
                 <div class="comments mb-4">
-                    <?php if (empty($comments)): ?>
+                    <?php if (empty($request['resolution'])): ?>
                         <div class="alert alert-info">
                             <i class="fas fa-info-circle me-2"></i> Chưa có bình luận nào.
                         </div>
                     <?php else: ?>
-                        <?php foreach ($comments as $comment): ?>
-                            <?php 
-                            $isStaff = $comment['role'] === 'staff' || $comment['role'] === 'admin';
-                            $userName = $comment['commenter_name'];
-                            ?>
-                            <div class="comment-item <?php echo $isStaff ? 'staff-comment' : 'student-comment'; ?>">
-                                <div class="comment-header">
-                                    <strong>
-                                        <?php echo $userName; ?>
-                                        <?php if ($isStaff): ?>
-                                            <span class="badge bg-info">Nhân viên</span>
-                                        <?php endif; ?>
-                                    </strong>
-                                    <span class="comment-time text-muted"><?php echo formatTimestamp($comment['created_at']); ?></span>
-                                </div>
-                                <div class="comment-body">
-                                    <?php echo nl2br(htmlspecialchars($comment['comment'])); ?>
-                                </div>
-                            </div>
-                        <?php endforeach; ?>
+                        <div class="comment-timeline p-3 bg-light rounded">
+                            <pre class="m-0" style="white-space: pre-wrap; font-family: inherit;"><?php echo htmlspecialchars($request['resolution']); ?></pre>
+                        </div>
                     <?php endif; ?>
                 </div>
                 
-                <?php if ($canAddComment && $request['status'] !== 'canceled'): ?>
+                <?php if ($canAddComment && $request['status'] !== 'rejected'): ?>
                     <form action="" method="post">
                         <input type="hidden" name="action" value="comment">
                         <div class="form-group mb-3">
@@ -590,109 +616,110 @@ switch ($request['priority']) {
                             <i class="fas fa-comment me-1"></i> Gửi Bình luận
                         </button>
                     </form>
-                <?php elseif ($request['status'] === 'canceled'): ?>
+                <?php elseif ($request['status'] === 'rejected'): ?>
                     <div class="alert alert-warning">
-                        <i class="fas fa-exclamation-triangle me-2"></i> Yêu cầu này đã bị hủy. Bình luận đã bị vô hiệu hóa.
+                        <i class="fas fa-exclamation-triangle me-2"></i> Yêu cầu này đã bị từ chối. Bình luận đã bị vô hiệu hóa.
                     </div>
                 <?php endif; ?>
             </div>
         </div>
     </div>
-    
-    <!-- Thanh bên -->
+      <!-- Thanh bên -->
     <div class="col-lg-4">
-        <!-- Lịch sử Hoạt động -->
+        <!-- Thông tin hệ thống -->
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Thông tin Hệ thống</h6>
+            </div>
+            <div class="card-body">
+                <div class="timeline">
+                    <!-- Sự kiện tạo yêu cầu -->
+                    <div class="timeline-item">
+                        <div class="timeline-item-marker"></div>
+                        <div class="timeline-item-content">
+                            <h6>Đã Tạo Yêu cầu</h6>
+                            <p>
+                                Yêu cầu được gửi bởi <?php echo $request['reporter_name']; ?>
+                            </p>
+                            <span class="timeline-item-date">
+                                <?php echo date('d/m/Y H:i', strtotime($request['request_date'])); ?>
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <!-- Xử lý trạng thái hiện tại -->
+                    <div class="timeline-item">
+                        <div class="timeline-item-marker"></div>
+                        <div class="timeline-item-content">
+                            <h6>Trạng thái Hiện tại</h6>
+                            <p>
+                                <span class="badge <?php echo $statusBadgeClass; ?>"><?php echo $statusText; ?></span>
+                            </p>
+                            <p>
+                                Mức độ ưu tiên: <span class="badge <?php echo $priorityBadgeClass; ?>"><?php echo ucfirst($request['priority']); ?></span>
+                            </p>
+                            <?php if ($request['assigned_to']): ?>
+                            <p>
+                                Nhân viên phụ trách: <?php echo $request['assignee_name']; ?>
+                            </p>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    
+                    <?php if ($request['updated_at'] && $request['updated_at'] !== $request['created_at']): ?>
+                    <div class="timeline-item">
+                        <div class="timeline-item-marker"></div>
+                        <div class="timeline-item-content">
+                            <h6>Cập nhật Gần nhất</h6>
+                            <p>
+                                Yêu cầu được cập nhật lần cuối
+                            </p>
+                            <span class="timeline-item-date">
+                                <?php echo date('d/m/Y H:i', strtotime($request['updated_at'])); ?>
+                            </span>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+                    
+                    <?php if ($request['completed_date']): ?>
+                    <div class="timeline-item">
+                        <div class="timeline-item-marker"></div>
+                        <div class="timeline-item-content">
+                            <h6>Đã Hoàn thành</h6>
+                            <p>
+                                Yêu cầu đã được xử lý và hoàn thành
+                            </p>
+                            <span class="timeline-item-date">
+                                <?php echo date('d/m/Y', strtotime($request['completed_date'])); ?>
+                            </span>
+                        </div>
+                    </div>                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Lịch sử Hoạt động (Comment) -->
+        <?php if (!empty($request['resolution'])): ?>
         <div class="card shadow mb-4">
             <div class="card-header py-3">
                 <h6 class="m-0 font-weight-bold text-primary">Lịch sử Hoạt động</h6>
             </div>
             <div class="card-body">
                 <div class="timeline">
-                    <?php if (empty($history)): ?>
-                        <div class="alert alert-info">
-                            <i class="fas fa-info-circle me-2"></i> Không có lịch sử hoạt động.
+                    <div class="timeline-item">
+                        <div class="timeline-item-marker">
+                            <i class="fas fa-comment"></i>
                         </div>
-                    <?php else: ?>
-                        <!-- Sự kiện tạo yêu cầu -->
-                        <div class="timeline-item">
-                            <div class="timeline-item-marker"></div>
-                            <div class="timeline-item-content">
-                                <h6>Đã Tạo Yêu cầu</h6>
-                                <p>
-                                    Yêu cầu được gửi bởi <?php echo $request['reported_by_name']; ?>
-                                </p>
-                                <span class="timeline-item-date">
-                                    <?php echo date('d/m/Y H:i', strtotime($request['request_date'])); ?>
-                                </span>
+                        <div class="timeline-item-content">
+                            <h6>Nhật ký cập nhật</h6>
+                            <div class="p-2 bg-light rounded">
+                                <pre style="white-space: pre-wrap; font-family: inherit; margin-bottom: 0;"><?php echo htmlspecialchars($request['resolution']); ?></pre>
                             </div>
                         </div>
-                        
-                        <?php foreach ($history as $event): ?>
-                            <?php 
-                            $isStaff = $event['role'] === 'staff' || $event['role'] === 'admin';
-                            $userName = $event['user_name'];
-                            $actionText = '';
-                            $iconClass = 'fas fa-history';
-                            
-                            switch ($event['action']) {
-                                case 'status_change':
-                                    $oldStatus = $event['old_value'] == 'pending' ? 'Đang chờ' : 
-                                               ($event['old_value'] == 'in_progress' ? 'Đang xử lý' : 
-                                               ($event['old_value'] == 'scheduled' ? 'Đã lên lịch' : 
-                                               ($event['old_value'] == 'completed' ? 'Hoàn thành' : 
-                                               ($event['old_value'] == 'canceled' ? 'Đã hủy' : ucfirst(str_replace('_', ' ', $event['old_value']))))));
-                                    
-                                    $newStatus = $event['new_value'] == 'pending' ? 'Đang chờ' : 
-                                               ($event['new_value'] == 'in_progress' ? 'Đang xử lý' : 
-                                               ($event['new_value'] == 'scheduled' ? 'Đã lên lịch' : 
-                                               ($event['new_value'] == 'completed' ? 'Hoàn thành' : 
-                                               ($event['new_value'] == 'canceled' ? 'Đã hủy' : ucfirst(str_replace('_', ' ', $event['new_value']))))));
-                                    
-                                    $actionText = "Trạng thái thay đổi từ <strong>" . $oldStatus . "</strong> thành <strong>" . $newStatus . "</strong>";
-                                    $iconClass = 'fas fa-sync-alt';
-                                    break;
-                                case 'priority_change':
-                                    $oldPriority = $event['old_value'] == 'low' ? 'Thấp' :
-                                                 ($event['old_value'] == 'normal' ? 'Bình thường' :
-                                                 ($event['old_value'] == 'high' ? 'Cao' :
-                                                 ($event['old_value'] == 'emergency' ? 'Khẩn cấp' : ucfirst($event['old_value']))));
-                                                 
-                                    $newPriority = $event['new_value'] == 'low' ? 'Thấp' :
-                                                 ($event['new_value'] == 'normal' ? 'Bình thường' :
-                                                 ($event['new_value'] == 'high' ? 'Cao' :
-                                                 ($event['new_value'] == 'emergency' ? 'Khẩn cấp' : ucfirst($event['new_value']))));
-                                    
-                                    $actionText = "Mức độ ưu tiên thay đổi từ <strong>" . $oldPriority . "</strong> thành <strong>" . $newPriority . "</strong>";
-                                    $iconClass = 'fas fa-flag';
-                                    break;
-                                case 'comment_added':
-                                    $actionText = "Đã thêm bình luận";
-                                    $iconClass = 'fas fa-comment';
-                                    break;
-                                case 'photo_added':
-                                    $actionText = "Đã tải lên ảnh";
-                                    $iconClass = 'fas fa-image';
-                                    break;
-                                default:
-                                    $actionText = ucfirst(str_replace('_', ' ', $event['action']));
-                            }
-                            ?>
-                            <div class="timeline-item">
-                                <div class="timeline-item-marker">
-                                    <i class="<?php echo $iconClass; ?>"></i>
-                                </div>
-                                <div class="timeline-item-content">
-                                    <h6><?php echo $userName; ?> <?php echo $actionText; ?></h6>
-                                    <?php if (!empty($event['details'])): ?>
-                                        <p><?php echo htmlspecialchars($event['details']); ?></p>
-                                    <?php endif; ?>
-                                    <span class="timeline-item-date">
-                                        <?php echo formatTimestamp($event['created_at']); ?>
-                                    </span>
-                                </div>
-                            </div>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+        </div>        <?php endif; ?>
                 </div>
             </div>
         </div>

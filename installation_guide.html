@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hướng Dẫn Cài Đặt và Chạy Hệ Thống Quản Lý Ký Túc Xá</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1, h2, h3 {
+            color: #2c3e50;
+        }
+        h1 {
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        h2 {
+            margin-top: 30px;
+            border-bottom: 1px solid #bdc3c7;
+            padding-bottom: 5px;
+        }
+        h3 {
+            margin-top: 25px;
+        }
+        code {
+            background-color: #f8f8f8;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            font-family: Consolas, Monaco, 'Andale Mono', monospace;
+            padding: 2px 4px;
+            color: #c7254e;
+        }
+        pre {
+            background-color: #f8f8f8;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            overflow: auto;
+        }
+        pre code {
+            border: none;
+            background: none;
+            padding: 0;
+        }
+        .container {
+            background-color: #fff;
+            padding: 20px 30px;
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        ul, ol {
+            padding-left: 25px;
+        }
+        .alert {
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+        .alert-info {
+            background-color: #d9edf7;
+            border-left: 5px solid #31708f;
+            color: #31708f;
+        }
+        .alert-warning {
+            background-color: #fcf8e3;
+            border-left: 5px solid #8a6d3b;
+            color: #8a6d3b;
+        }
+        .footer {
+            margin-top: 40px;
+            padding-top: 10px;
+            border-top: 1px solid #eee;
+            text-align: center;
+            font-size: 0.9em;
+            color: #777;
+        }
+        .step {
+            margin-bottom: 30px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        table, th, td {
+            border: 1px solid #ddd;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Hướng Dẫn Cài Đặt và Chạy Hệ Thống Quản Lý Ký Túc Xá</h1>
+
+        <div class="alert alert-info">
+            <strong>Lưu ý:</strong> Hướng dẫn này sẽ giúp bạn cài đặt và chạy ứng dụng quản lý ký túc xá trên thiết bị mới sử dụng XAMPP.
+        </div>
+
+        <h2>Yêu Cầu Hệ Thống</h2>
+        <ul>
+            <li>Web server: <a href="https://www.apachefriends.org/download.html" target="_blank">XAMPP</a> (bao gồm Apache, MySQL, PHP)</li>
+            <li>PHP phiên bản 7.4 trở lên</li>
+            <li>MySQL phiên bản 5.7 trở lên</li>
+            <li>Trình duyệt web hiện đại (Chrome, Firefox, Edge, Safari)</li>
+        </ul>
+
+        <h2>Các Bước Cài Đặt</h2>
+
+        <div class="step">
+            <h3>1. Cài Đặt XAMPP</h3>
+            <ol>
+                <li>Tải xuống XAMPP từ <a href="https://www.apachefriends.org/download.html" target="_blank">trang web chính thức</a></li>
+                <li>Cài đặt XAMPP theo hướng dẫn dựa trên hệ điều hành của bạn:
+                    <ul>
+                        <li>Windows: Chạy tệp cài đặt và làm theo các bước trong trình hướng dẫn</li>
+                        <li>macOS: Mở tệp .dmg và kéo XAMPP vào thư mục Applications</li>
+                        <li>Linux: Cấp quyền thực thi cho tệp cài đặt (<code>chmod +x xampp-linux-*-installer.run</code>) và chạy nó (<code>sudo ./xampp-linux-*-installer.run</code>)</li>
+                    </ul>
+                </li>
+            </ol>
+        </div>
+
+        <div class="step">
+            <h3>2. Khởi Động XAMPP</h3>
+            <ol>
+                <li>Mở XAMPP Control Panel:
+                    <ul>
+                        <li>Windows: Từ menu Start hoặc biểu tượng trên desktop</li>
+                        <li>macOS: Từ thư mục Applications</li>
+                        <li>Linux: Chạy lệnh <code>sudo /opt/lampp/manager-linux-x64.run</code> hoặc tương tự</li>
+                    </ul>
+                </li>
+                <li>Khởi động các dịch vụ:
+                    <ul>
+                        <li>Apache</li>
+                        <li>MySQL</li>
+                    </ul>
+                </li>
+            </ol>
+        </div>
+
+        <div class="step">
+            <h3>3. Tải và Cài Đặt Dự Án</h3>
+            
+            <h4>Cách 1: Sử dụng Git (nếu có)</h4>
+            <ol>
+                <li>Mở terminal hoặc command prompt</li>
+                <li>Di chuyển đến thư mục htdocs trong cài đặt XAMPP:
+                    <pre><code>cd [đường_dẫn_đến_xampp]/htdocs</code></pre>
+                    <ul>
+                        <li>Windows: <code>cd C:\xampp\htdocs</code></li>
+                        <li>macOS: <code>cd /Applications/XAMPP/xampp/htdocs</code></li>
+                        <li>Linux: <code>cd /opt/lampp/htdocs</code></li>
+                    </ul>
+                </li>
+                <li>Sao chép dự án từ repository (nếu có):
+                    <pre><code>git clone [url_repository] LTW</code></pre>
+                </li>
+            </ol>
+            
+            <h4>Cách 2: Sao chép thủ công</h4>
+            <ol>
+                <li>Tải xuống mã nguồn dự án ở dạng file ZIP</li>
+                <li>Giải nén file ZIP vào thư mục htdocs trong cài đặt XAMPP:
+                    <ul>
+                        <li>Windows: <code>C:\xampp\htdocs\LTW</code></li>
+                        <li>macOS: <code>/Applications/XAMPP/xampp/htdocs/LTW</code></li>
+                        <li>Linux: <code>/opt/lampp/htdocs/LTW</code></li>
+                    </ul>
+                </li>
+            </ol>
+        </div>
+
+        <div class="step">
+            <h3>4. Thiết Lập Cơ Sở Dữ Liệu</h3>
+            
+            <h4>Cách 1: Sử dụng trang thiết lập tự động</h4>
+            <ol>
+                <li>Mở trình duyệt web và truy cập:
+                    <pre><code>http://localhost/LTW/config/setup.php</code></pre>
+                </li>
+                <li>Hệ thống sẽ tự động tạo cơ sở dữ liệu và các bảng cần thiết</li>
+                <li>Nếu muốn cài đặt lại cơ sở dữ liệu với dữ liệu mẫu, truy cập:
+                    <pre><code>http://localhost/LTW/config/run_setup.php</code></pre>
+                </li>
+            </ol>
+            
+            <h4>Cách 2: Thiết lập thủ công</h4>
+            <ol>
+                <li>Mở trình duyệt web và truy cập phpMyAdmin:
+                    <pre><code>http://localhost/phpmyadmin</code></pre>
+                </li>
+                <li>Tạo cơ sở dữ liệu mới với tên <code>dormitory_db</code>
+                    <ul>
+                        <li>Click vào tab "Databases" (Cơ sở dữ liệu)</li>
+                        <li>Nhập "dormitory_db" vào trường "Database name" (Tên cơ sở dữ liệu)</li>
+                        <li>Chọn "utf8mb4_unicode_ci" làm mã hóa</li>
+                        <li>Click "Create" (Tạo)</li>
+                    </ul>
+                </li>
+                <li>Sau khi tạo cơ sở dữ liệu, truy cập trang thiết lập để tạo các bảng và dữ liệu mẫu:
+                    <pre><code>http://localhost/LTW/config/setup.php</code></pre>
+                </li>
+            </ol>
+        </div>
+
+        <div class="step">
+            <h3>5. Cấu Hình Kết Nối Cơ Sở Dữ Liệu (Nếu Cần)</h3>
+            <p>Nếu bạn cần thay đổi thông tin kết nối cơ sở dữ liệu (ví dụ: mật khẩu MySQL không phải là mặc định), hãy chỉnh sửa các file sau:</p>
+            <ol>
+                <li>Mở file <code>config/database.php</code> và cập nhật thông tin kết nối:
+                    <pre><code>$host = 'localhost';      // Địa chỉ máy chủ MySQL, thường là localhost
+$username = 'root';       // Tên người dùng MySQL
+$password = '';           // Mật khẩu MySQL
+$database = 'dormitory_db'; // Tên cơ sở dữ liệu</code></pre>
+                </li>
+                <li>Tương tự, mở file <code>includes/db_connection.php</code> và cập nhật thông tin kết nối nếu cần.</li>
+            </ol>
+        </div>
+
+        <div class="step">
+            <h3>6. Truy Cập Hệ Thống</h3>
+            <ol>
+                <li>Mở trình duyệt web và truy cập:
+                    <pre><code>http://localhost/LTW/</code></pre>
+                </li>
+                <li>Đăng nhập với các tài khoản mặc định:
+                    <table>
+                        <tr>
+                            <th>Vai trò</th>
+                            <th>Tên đăng nhập</th>
+                            <th>Mật khẩu</th>
+                        </tr>
+                        <tr>
+                            <td>Admin</td>
+                            <td>admin</td>
+                            <td>admin123</td>
+                        </tr>
+                        <tr>
+                            <td>Sinh viên</td>
+                            <td>student1</td>
+                            <td>student123</td>
+                        </tr>
+                        <tr>
+                            <td>Nhân viên</td>
+                            <td>staff</td>
+                            <td>staff123</td>
+                        </tr>
+                    </table>
+                </li>
+            </ol>
+        </div>
+
+        <h2>Xử Lý Sự Cố</h2>
+
+        <h3>Không kết nối được đến cơ sở dữ liệu</h3>
+        <ol>
+            <li>Đảm bảo dịch vụ MySQL đang chạy trong XAMPP Control Panel</li>
+            <li>Kiểm tra thông tin kết nối trong <code>config/database.php</code> và <code>includes/db_connection.php</code></li>
+            <li>Đảm bảo cơ sở dữ liệu <code>dormitory_db</code> đã được tạo</li>
+        </ol>
+
+        <h3>Lỗi "Access denied" khi kết nối MySQL</h3>
+        <ol>
+            <li>Kiểm tra tên người dùng và mật khẩu MySQL trong các file cấu hình</li>
+            <li>Nếu bạn đã thay đổi mật khẩu root MySQL, hãy cập nhật thông tin trong file cấu hình</li>
+        </ol>
+
+        <h3>Trang hiển thị lỗi PHP</h3>
+        <ol>
+            <li>Đảm bảo Apache đang chạy trong XAMPP Control Panel</li>
+            <li>Kiểm tra phiên bản PHP (yêu cầu 7.4 trở lên)</li>
+            <li>Đảm bảo các thư mục và file có quyền đọc phù hợp</li>
+        </ol>
+
+        <h3>Các vấn đề về quyền truy cập file</h3>
+        <p>Đối với Linux và macOS, đảm bảo thư mục <code>uploads</code> và <code>uploads/profile_pics</code> có quyền ghi:</p>
+        <pre><code>chmod -R 755 /path/to/htdocs/LTW
+chmod -R 777 /path/to/htdocs/LTW/uploads</code></pre>
+
+        <h2>Cấu Trúc Dự Án</h2>
+        <ul>
+            <li><strong>/api</strong> - Các API và endpoint xử lý dữ liệu</li>
+            <li><strong>/assets</strong> - Các tài nguyên tĩnh như CSS, JavaScript, hình ảnh</li>
+            <li><strong>/config</strong> - File cấu hình hệ thống</li>
+            <li><strong>/includes</strong> - Các file PHP được sử dụng lại trong nhiều trang</li>
+            <li><strong>/views</strong> - Các file giao diện người dùng</li>
+            <li><strong>/uploads</strong> - Thư mục lưu trữ file tải lên</li>
+        </ul>
+
+        <h2>Bảo Mật</h2>
+        <ol>
+            <li>Sau khi cài đặt, hãy thay đổi mật khẩu cho tài khoản admin mặc định</li>
+            <li>Đảm bảo thư mục XAMPP được bảo mật theo hướng dẫn của nhà cung cấp</li>
+            <li>Trong môi trường sản xuất, hãy xem xét các biện pháp bổ sung như HTTPS, tường lửa, v.v.</li>
+        </ol>
+
+        <div class="alert alert-warning">
+            <strong>Lưu ý về bảo mật:</strong> Trong môi trường sản xuất, cần thực hiện thêm các biện pháp bảo mật như sử dụng HTTPS, cấu hình tường lửa, và sử dụng mật khẩu mạnh cho cơ sở dữ liệu.
+        </div>
+
+        <div class="footer">
+            <p>Hướng dẫn này được tạo ngày: 25/06/2025</p>
+            <p>Hệ thống Quản lý Ký túc xá | Bản quyền © 2025</p>
+        </div>
+    </div>
+</body>
+</html>
